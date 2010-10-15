@@ -8,4 +8,15 @@ Requirements:
 	* (python github)[http://github.com/ask/python-github2]
 	
 Usage:
-	./migrateissues.py --google-project-name=[name] --github-api-token=[token] --github-username=[git username] --github-project=[github project name]                                  
+	migrateissues.py [options]
+
+	Options:
+	  -h, --help            show this help message and exit
+	  -g GOOGLE_PROJECT_NAME, --google-project-name=GOOGLE_PROJECT_NAME
+	                        The project name (from the URL) from google code.
+	  -t GITHUB_API_TOKEN, --github-api-token=GITHUB_API_TOKEN
+	                        Yout Github api token
+	  -u GITHUB_USER_NAME, --github-user-name=GITHUB_USER_NAME
+	                        The Github username
+	  -p GITHUB_PROJECT, --github-project=GITHUB_PROJECT
+	                        The Github project name

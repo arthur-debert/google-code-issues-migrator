@@ -129,7 +129,7 @@ def process_issues(issues_csv, sync_comments=True):
 if __name__ == "__main__":
     import optparse         
     import sys                          
-    usage = "usage: %prog [options] arg1 arg2"
+    usage = "usage: %prog [options]"
     parser = optparse.OptionParser(usage)
     parser.add_option('-g', '--google-project-name', action="store", dest="google_project_name", help="The project name (from the URL) from google code.")
     parser.add_option('-t', '--github-api-token', action="store", dest="github_api_token", help="Yout Github api token")
