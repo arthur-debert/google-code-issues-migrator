@@ -1,0 +1,11 @@
+This is a simple script to move issues from google code to github.
+
+Some liberties have been taken (as we cannot, for example, know which google user corresponds to other user on github). But most information is complete.
+
+Requirements:
+
+	* (httplib2)[http://code.google.com/p/httplib2/]
+	* (python github)[http://github.com/ask/python-github2]
+	
+Usage:
+	./migrateissues.py --google-project-name=[name] --github-api-token=[token] --github-username=[git username] --github-project=[github project name]                                  
