@@ -134,7 +134,7 @@ if __name__ == "__main__":
     parser.add_option('-g', '--google-project-name', action="store", dest="google_project_name", help="The project name (from the URL) from google code.")
     parser.add_option('-t', '--github-api-token', action="store", dest="github_api_token", help="Yout Github api token")
     parser.add_option('-u', '--github-user-name', action="store", dest="github_user_name", help="The Github username")
-    parser.add_option('-p', '--github-project', action="store", dest="github_project", help="The Github project name")
+    parser.add_option('-p', '--github-project', action="store", dest="github_project", help="The Github project name:: user-name/project-name")
     global options
     options, args = parser.parse_args(args=sys.argv, values=None)
     try:               
