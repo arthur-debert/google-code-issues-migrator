@@ -106,8 +106,9 @@ def post_to_github(issue, sync_comments=True):
     for i,comment in enumerate(issue.comments):
 
         exists = False
-        for old_c in old_comments:
-            if old_c.body == comment.body:
+        for old_c in old_comments:  
+            # issue status changes have empty bodies in google code , exclude those:
+            if bool(old_c.body) or old_c.body == comment.body :
                 exists = True
                 logging.info("Found comment there, skipping")
                 break
