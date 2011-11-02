@@ -35,11 +35,15 @@ class Issue(object):
     def __init__(self, issue_line):
         for k,v in issue_line.items():
             setattr(self, k.lower(), v)
+        logging.info("Issue #%s: %s" % (self.id, self.summary))
         self.get_original_data() 
 
     def parse_date(self, node):
-         created_at_raw = node.find('span', 'date').string
-         return datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
+        created_at_raw = node.find('span', 'date').string
+        try:
+            return datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
+        except ValueError:     # if can't parse time, just assume now
+            return datetime.datetime.now
 
     def get_user(self, node):
         return node.findAll('a')[1].string
@@ -49,11 +53,15 @@ class Issue(object):
 	
             
     def get_original_data(self):
+        logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
         self.body = "%s</br>Original link: %s" % (soup.find('td', 'vt issuedescription').find('pre') , self.original_url)
         created_at_raw = soup.find('td', 'vt issuedescription').find('span', 'date').string
-        self.created_at = datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
+        try:
+            self.created_at = datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
+        except ValueError:     # if can't parse time, just assume now
+            self.created_at = datetime.datetime.now
         comments = []
         for node in soup.findAll('td', "vt issuecomment"):
             try:
@@ -76,6 +84,7 @@ class Issue(object):
             
 def download_issues():
     url = "http://code.google.com/p/" + options.google_project_name + "/issues/csv?can=1&q=&colspec=ID%20Type%20Status%20Priority%20Milestone%20Owner%20Summary"
+    logging.info('Downloading %s' % url)
     content = get_url_content(url)   
     f = StringIO(content)
     return f
