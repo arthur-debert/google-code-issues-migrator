@@ -91,7 +91,7 @@ def download_issues():
 
 def post_to_github(issue, sync_comments=True):
     logging.info('should post %s', issue)
-    github = Github(username=options.github_user_name, api_token=options.github_api_token, requests_per_second=0.8)
+    github = Github(username=options.github_user_name, api_token=options.github_api_token, requests_per_second=0.5)
     if issue.status.lower()  in "invalid closed fixed wontfix verified done duplicate".lower():
         issue.status = 'closed'
     else:
