@@ -63,7 +63,7 @@ class Issue(object):
         except ValueError:     # if can't parse time, just assume now
             self.created_at = datetime.datetime.now
         comments = []
-        for node in soup.findAll('td', "vt issuecomment"):
+        for node in soup.findAll('div', "vt issuecomment"):
             try:
                 date = self.parse_date(node)
                 author  = self.get_user(node)
