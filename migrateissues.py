@@ -9,7 +9,7 @@ from BeautifulSoup import BeautifulSoup
 
 options = None
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 def get_url_content(url):
     h = httplib2.Http(".cache")
