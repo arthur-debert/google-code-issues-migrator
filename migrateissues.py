@@ -56,10 +56,15 @@ class Issue(object):
         return unicode(node.find('pre').renderContents())
 
     def get_labels(self, soup):
-        labels = []
+        self.labels = []
+        self.milestones = [] # Milestones are a form of label in googlecode
         for node in soup.findAll(attrs = { 'class' : 'label' }):
-            labels.append(re.sub('<\/?b>', '', node.renderContents()))
-        return labels
+            label = re.sub('<\/?b>', '', node.renderContents())
+            if re.match('^Milestone-', label):
+                self.milestones.append(re.sub('^Milestone-', '', label))
+            else:
+                self.labels.append(label)
+        return
 	
             
     def get_original_data(self):
@@ -85,8 +90,9 @@ class Issue(object):
                 pass
         self.comments = comments    
         logging.info('got comments %s' %  len(comments))
-        self.labels = self.get_labels(soup)
+        self.get_labels(soup)
         logging.info('got labels %s' % len(self.labels))
+        logging.info('got milestones %s' % len(self.milestones))
 
     @property
     def original_url(self):                             
