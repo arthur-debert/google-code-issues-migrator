@@ -1,6 +1,7 @@
 import csv
 import logging
 import datetime
+import re
 from StringIO import StringIO
 
 import httplib2
@@ -39,14 +40,17 @@ class Issue(object):
         self.get_original_data() 
 
     def parse_date(self, node):
-        created_at_raw = node.find('span', 'date').string
+        datenode = node.find(attrs={'class' : 'date'})
+        datestring = datenode.string
         try:
-            return datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
+            return datetime.datetime.strptime(datestring, '%b %d, %Y')
         except ValueError:     # if can't parse time, just assume now
             return datetime.datetime.now
 
     def get_user(self, node):
-        return node.findAll('a')[1].string
+        authornode = node.find(attrs={'class' : 'author'})
+        userhrefnode = authornode.find(attrs={'href' : re.compile('^\/u\/')})
+        return userhrefnode.string
 
     def get_body(self,node):
         return node.find('pre').string
@@ -56,14 +60,16 @@ class Issue(object):
         logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
-        self.body = "%s</br>Original link: %s" % (soup.find('td', 'vt issuedescription').find('pre') , self.original_url)
-        created_at_raw = soup.find('td', 'vt issuedescription').find('span', 'date').string
+        descriptionnode = soup.find(attrs={'class' : "cursor_off vt issuedescription"})
+        self.body = "%s</br>Original link: %s" % (descriptionnode.find('pre') , self.original_url)
+        datenode = descriptionnode.find(attrs={'class' : 'date'})
+        datestring = datenode.string
         try:
-            self.created_at = datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
+            self.created_at = datetime.datetime.strptime(datestring, '%b %d, %Y')
         except ValueError:     # if can't parse time, just assume now
             self.created_at = datetime.datetime.now
         comments = []
-        for node in soup.findAll('td', "vt issuecomment"):
+        for node in soup.findAll(attrs={'class' : "cursor_off vt issuecomment"}):
             try:
                 date = self.parse_date(node)
                 author  = self.get_user(node)
