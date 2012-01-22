@@ -53,7 +53,7 @@ class Issue(object):
         return userhrefnode.string
 
     def get_body(self,node):
-        return node.find('pre').string
+        return unicode(node.find('pre').renderContents())
 	
             
     def get_original_data(self):
@@ -61,7 +61,7 @@ class Issue(object):
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
         descriptionnode = soup.find(attrs={'class' : "cursor_off vt issuedescription"})
-        self.body = "%s</br>Original link: %s" % (descriptionnode.find('pre') , self.original_url)
+        self.body = unicode("%s<br />Original link: %s" % (descriptionnode.find('pre').renderContents() , self.original_url))
         datenode = descriptionnode.find(attrs={'class' : 'date'})
         datestring = datenode['title']
         try:
