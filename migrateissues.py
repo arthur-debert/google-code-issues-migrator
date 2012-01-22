@@ -54,6 +54,12 @@ class Issue(object):
 
     def get_body(self,node):
         return unicode(node.find('pre').renderContents())
+
+    def get_labels(self, soup):
+        labels = []
+        for node in soup.findAll(attrs = { 'class' : 'label' }):
+            labels.append(re.sub('<\/?b>', '', node.renderContents()))
+        return labels
 	
             
     def get_original_data(self):
@@ -79,6 +85,8 @@ class Issue(object):
                 pass
         self.comments = comments    
         logging.info('got comments %s' %  len(comments))
+        self.labels = self.get_labels(soup)
+        logging.info('got labels %s' % len(self.labels))
 
     @property
     def original_url(self):                             
