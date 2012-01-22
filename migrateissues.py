@@ -85,7 +85,8 @@ class Issue(object):
                 date = self.parse_date(node)
                 author  = self.get_user(node)
                 body = self.get_body(node)
-                comments.append(IssueComment(date, author, body))
+                if not re.match('^\\n<i>\(No comment was entered for this change\.\)<\/i>\\n$', body):
+                    comments.append(IssueComment(date, author, body))
             except:
                 pass
         self.comments = comments    
