@@ -14,6 +14,10 @@ logging.basicConfig(level=logging.DEBUG)
 
 g_statusre = \
   '^('                                                         + \
+  'Issue has not had initial review yet'                 + '|' + \
+  'Problem reproduced \/ Need acknowledged'              + '|' + \
+  'Work on this issue has begun'                         + '|' + \
+  'Waiting on feedback or additional information'        + '|' + \
   'Developer made source code changes, QA should verify' + '|' + \
   'QA has verified that the fix worked'                  + '|' + \
   'This was not a valid issue report'                    + '|' + \
