@@ -41,9 +41,9 @@ class Issue(object):
 
     def parse_date(self, node):
         datenode = node.find(attrs={'class' : 'date'})
-        datestring = datenode.string
+        datestring = datenode['title']
         try:
-            return datetime.datetime.strptime(datestring, '%b %d, %Y')
+            return datetime.datetime.strptime(datestring, '%a %b %d %H:%M:%S %Y')
         except ValueError:     # if can't parse time, just assume now
             return datetime.datetime.now
 
@@ -63,9 +63,9 @@ class Issue(object):
         descriptionnode = soup.find(attrs={'class' : "cursor_off vt issuedescription"})
         self.body = "%s</br>Original link: %s" % (descriptionnode.find('pre') , self.original_url)
         datenode = descriptionnode.find(attrs={'class' : 'date'})
-        datestring = datenode.string
+        datestring = datenode['title']
         try:
-            self.created_at = datetime.datetime.strptime(datestring, '%b %d, %Y')
+            self.created_at = datetime.datetime.strptime(datestring, '%a %b %d %H:%M:%S %Y')
         except ValueError:     # if can't parse time, just assume now
             self.created_at = datetime.datetime.now
         comments = []
