@@ -12,6 +12,17 @@ options = None
 
 logging.basicConfig(level=logging.DEBUG)
 
+g_statusre = \
+  '^('                                                         + \
+  'Developer made source code changes, QA should verify' + '|' + \
+  'QA has verified that the fix worked'                  + '|' + \
+  'This was not a valid issue report'                    + '|' + \
+  'Unable to reproduce the issue'                        + '|' + \
+  'This report duplicates an existing issue'             + '|' + \
+  'We decided to not take action on this issue'          + '|' + \
+  'The requested non-coding task was completed'                + \
+  ')$'
+
 def get_url_content(url):
     h = httplib2.Http(".cache")
     resp, content = h.request(url, "GET")
@@ -65,6 +76,12 @@ class Issue(object):
             else:
                 self.labels.append(label)
         return
+
+    def get_status(self, soup):
+        node = soup.find(name = 'span', attrs = { 'title' : re.compile(g_statusre) })
+        self.status = unicode(node.string)
+        self.labels.append("Status-%s" % self.status)
+        return
 	
             
     def get_original_data(self):
@@ -94,6 +111,7 @@ class Issue(object):
         self.get_labels(soup)
         logging.info('got labels %s' % len(self.labels))
         logging.info('got milestones %s' % len(self.milestones))
+        self.get_status(soup)
 
     @property
     def original_url(self):                             
