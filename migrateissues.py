@@ -70,7 +70,7 @@ class Issue(object):
         self.labels = []
         self.milestones = [] # Milestones are a form of label in googlecode
         for node in soup.findAll(attrs = { 'class' : 'label' }):
-            label = re.sub('<\/?b>', '', node.renderContents())
+            label = unicode(re.sub('<\/?b>', '', node.renderContents()))
             if re.match('^Milestone-', label):
                 self.milestones.append(re.sub('^Milestone-', '', label))
             else:
