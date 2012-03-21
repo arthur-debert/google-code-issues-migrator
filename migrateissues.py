@@ -5,7 +5,7 @@ from StringIO import StringIO
 
 import httplib2
 from github2.client import Github
-from BeautifulSoup import BeautifulSoup
+from bs4 import BeautifulSoup
 
 options = None
 
@@ -27,7 +27,7 @@ class IssueComment(object):
 
     @property
     def body(self):
-        return ("%s - %s \n%s" % (self.author, self.created_at, self.body_raw)).encode('utf-8')
+        return ("_%s - %s \n%s_" % (self.author, self.created_at, self.body_raw)).encode('utf-8')
 
     def __repr__(self):
         return self.body.encode('utf-8')
@@ -49,10 +49,11 @@ class Issue(object):
             return datetime.datetime.now
 
     def get_user(self, node):
-        return node.findAll('a')[1].string
+        return node.find_all('a')[1].string
 
     def get_body(self, node):
-        return node.find('pre').string
+        print node.find('pre').text
+        return node.find('pre').text
 
     def get_original_data(self):
         logging.info("GET %s" % self.original_url)
@@ -65,7 +66,7 @@ class Issue(object):
         except ValueError:     # if can't parse time, just assume now
             self.created_at = datetime.datetime.now
         comments = []
-        for node in soup.findAll('td', "vt issuecomment"):
+        for node in soup.find_all('td', "vt issuecomment"):
             try:
                 date = self.parse_date(node)
                 author = self.get_user(node)
@@ -95,7 +96,7 @@ def download_issues():
 
 def post_to_github(issue, sync_comments=True):
     logging.info('should post %s', issue)
-    github = Github(username=options.github_user_name, api_token=options.github_api_token, requests_per_second=1)
+    github = Github(username=options.github_user_name, api_token=options.github_api_token, requests_per_second=0.75)
     if issue.status.lower()  in "invalid closed fixed wontfix verified".lower():
         issue.status = 'closed'
     else:
