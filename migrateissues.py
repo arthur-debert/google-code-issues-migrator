@@ -58,7 +58,7 @@ class Issue(object):
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
         created_at = self.parse_date(soup.find('td', 'vt issuedescription').find('span', 'date').string)
-        self.body = "%s\n\n\nOriginal issue: %s (%s)" % (
+        self.body = "%s\n\n\n_Original issue: %s (%s)_" % (
             soup.find('td', 'vt issuedescription').find('pre').text,
             self.original_url,
             created_at.strftime('%Y-%m-%d')
@@ -70,7 +70,7 @@ class Issue(object):
                 author = self.get_user(node)
                 body = self.get_body(node)
 
-                if body != '' and body != "(No comment was entered for this change.)\n":
+                if body != '' and "(No comment was entered for this change.)" not in body:
                     # only add comments that are actual comments.
                     comments.append(IssueComment(date, author, body))
             except:
