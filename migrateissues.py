@@ -52,21 +52,20 @@ class Issue(object):
         return node.find_all('a')[1].string
 
     def get_body(self, node):
-        print node.find('pre').text
         return node.find('pre').text
 
     def get_original_data(self):
         logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
-        self.body = "%s</br>Original link: %s" % (soup.find('td', 'vt issuedescription').find('pre'), self.original_url)
+        self.body = "%s\n\nOriginal link: %s" % (soup.find('td', 'vt issuedescription').find('pre').text, self.original_url)
         created_at_raw = soup.find('td', 'vt issuedescription').find('span', 'date').string
         try:
             self.created_at = datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
         except ValueError:     # if can't parse time, just assume now
             self.created_at = datetime.datetime.now
         comments = []
-        for node in soup.find_all('td', "vt issuecomment"):
+        for node in soup.find_all('div', "issuecomment"):
             try:
                 date = self.parse_date(node)
                 author = self.get_user(node)
