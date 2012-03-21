@@ -41,10 +41,9 @@ class Issue(object):
         logging.info("Issue #%s: %s" % (self.id, self.summary))
         self.get_original_data()
 
-    def parse_date(self, node):
-        created_at_raw = node.find('span', 'date').string
+    def parse_date(self, date_string):
         try:
-            return datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
+            return datetime.datetime.strptime(date_string, '%b %d, %Y')
         except ValueError:     # if can't parse time, just assume now
             return datetime.datetime.now
 
@@ -59,18 +58,17 @@ class Issue(object):
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
         self.body = "%s\n\nOriginal link: %s" % (soup.find('td', 'vt issuedescription').find('pre').text, self.original_url)
-        created_at_raw = soup.find('td', 'vt issuedescription').find('span', 'date').string
-        try:
-            self.created_at = datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
-        except ValueError:     # if can't parse time, just assume now
-            self.created_at = datetime.datetime.now
+        self.created_at = self.parse_date(soup.find('td', 'vt issuedescription').find('span', 'date').string)
         comments = []
         for node in soup.find_all('div', "issuecomment"):
             try:
-                date = self.parse_date(node)
+                date = self.parse_date(node.find('span', 'date').string)
                 author = self.get_user(node)
                 body = self.get_body(node)
-                comments.append(IssueComment(date, author, body))
+
+                if body != "(No comment was entered for this change.)":
+                    # only add comments that are actual comments.
+                    comments.append(IssueComment(date, author, body))
             except:
                 pass
         self.comments = comments
@@ -109,7 +107,8 @@ def post_to_github(issue, sync_comments=True):
         logging.info("issue did not exist")
         git_issue = github.issues.open(options.github_project,
             title=title,
-            body=issue.body
+            body=issue.body,
+            created_at=created_at
         )
     if issue.status == 'closed':
         github.issues.close(options.github_project, git_issue.number)
