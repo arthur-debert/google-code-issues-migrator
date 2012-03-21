@@ -94,7 +94,7 @@ def download_issues():
 def post_to_github(issue, sync_comments=True):
     logging.info('should post %s', issue)
     github = Github(username=options.github_user_name, api_token=options.github_api_token, requests_per_second=0.50)
-    if issue.status.lower()  in "invalid closed fixed wontfix verified".lower():
+    if issue.status.lower() in "invalid closed fixed wontfix verified".lower():
         issue.status = 'closed'
     else:
         issue.status = 'open'
@@ -108,7 +108,7 @@ def post_to_github(issue, sync_comments=True):
         git_issue = github.issues.open(options.github_project,
             title=title,
             body=issue.body,
-            created_at=created_at
+            created_at=issue.created_at
         )
     if issue.status == 'closed':
         github.issues.close(options.github_project, git_issue.number)
@@ -118,7 +118,6 @@ def post_to_github(issue, sync_comments=True):
     for i, comment in enumerate(issue.comments):
         exists = False
         for old_c in old_comments:
-            # issue status changes have empty bodies in google code , exclude those:
             if bool(old_c.body) or old_c.body == comment.body:
                 exists = True
                 logging.info("Found comment there, skipping")
