@@ -27,7 +27,7 @@ class IssueComment(object):
 
     @property
     def body(self):
-        return ("_%s - %s_\n%s" % (self.author, self.created_at, self.body_raw)).encode('utf-8')
+        return ("_%s - %s_\n%s" % (self.author, self.created_at.strftime('%Y-%m-%d'), self.body_raw)).encode('utf-8')
 
     def __repr__(self):
         return self.body.encode('utf-8')
@@ -57,11 +57,12 @@ class Issue(object):
         logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
+        print soup.find('td', 'vt issuedescription').find('span', 'date').string
         created_at = self.parse_date(soup.find('td', 'vt issuedescription').find('span', 'date').string)
-        self.body = "%s\n\nOriginal date: %s\nOriginal link: %s" % (
+        self.body = "%s\n\n\nOriginal: %s (%s)" % (
             soup.find('td', 'vt issuedescription').find('pre').text,
-            created_at,
-            self.original_url
+            self.original_url,
+            created_at.strftime('%Y-%m-%d')
         )
         print self.body
         comments = []
