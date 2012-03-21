@@ -27,7 +27,7 @@ class IssueComment(object):
 
     @property
     def body(self):
-        return ("_%s - %s \n%s_" % (self.author, self.created_at, self.body_raw)).encode('utf-8')
+        return ("_%s - %s_\n%s" % (self.author, self.created_at, self.body_raw)).encode('utf-8')
 
     def __repr__(self):
         return self.body.encode('utf-8')
