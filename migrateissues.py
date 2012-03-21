@@ -57,14 +57,12 @@ class Issue(object):
         logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
-        print soup.find('td', 'vt issuedescription').find('span', 'date').string
         created_at = self.parse_date(soup.find('td', 'vt issuedescription').find('span', 'date').string)
         self.body = "%s\n\n\nOriginal: %s (%s)" % (
             soup.find('td', 'vt issuedescription').find('pre').text,
             self.original_url,
             created_at.strftime('%Y-%m-%d')
         )
-        print self.body
         comments = []
         for node in soup.find_all('div', "issuecomment"):
             try:
