@@ -17,24 +17,26 @@ def get_url_content(url):
     resp, content = h.request(url, "GET")
     return content
 
+
 class IssueComment(object):
     def __init__(self, date, author, body):
-        self.created_at  = date
+        self.created_at = date
         self.body_raw = body
         self.author = author
         self.user = options.github_user_name
 
     @property
-    def body (self):
+    def body(self):
         return ("%s - %s \n%s" % (self.author, self.created_at, self.body_raw)).encode('utf-8')
 
     def __repr__(self):
         return self.body.encode('utf-8')
 
+
 class Issue(object):
 
     def __init__(self, issue_line):
-        for k,v in issue_line.items():
+        for k, v in issue_line.items():
             setattr(self, k.lower(), v)
         logging.info("Issue #%s: %s" % (self.id, self.summary))
         self.get_original_data()
@@ -49,15 +51,14 @@ class Issue(object):
     def get_user(self, node):
         return node.findAll('a')[1].string
 
-    def get_body(self,node):
+    def get_body(self, node):
         return node.find('pre').string
-
 
     def get_original_data(self):
         logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
-        self.body = "%s</br>Original link: %s" % (soup.find('td', 'vt issuedescription').find('pre') , self.original_url)
+        self.body = "%s</br>Original link: %s" % (soup.find('td', 'vt issuedescription').find('pre'), self.original_url)
         created_at_raw = soup.find('td', 'vt issuedescription').find('span', 'date').string
         try:
             self.created_at = datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
@@ -67,13 +68,13 @@ class Issue(object):
         for node in soup.findAll('td', "vt issuecomment"):
             try:
                 date = self.parse_date(node)
-                author  = self.get_user(node)
+                author = self.get_user(node)
                 body = self.get_body(node)
                 comments.append(IssueComment(date, author, body))
             except:
                 pass
         self.comments = comments
-        logging.info('got comments %s' %  len(comments))
+        logging.info('got comments %s' % len(comments))
 
     @property
     def original_url(self):
@@ -83,12 +84,14 @@ class Issue(object):
     def __repr__(self):
         return u"%s - %s " % (self.id, self.summary)
 
+
 def download_issues():
     url = "http://code.google.com/p/" + options.google_project_name + "/issues/csv?can=1&q=&colspec=ID%20Type%20Status%20Priority%20Milestone%20Owner%20Summary"
     logging.info('Downloading %s' % url)
     content = get_url_content(url)
     f = StringIO(content)
     return f
+
 
 def post_to_github(issue, sync_comments=True):
     logging.info('should post %s', issue)
@@ -99,26 +102,25 @@ def post_to_github(issue, sync_comments=True):
         issue.status = 'open'
     try:
         git_issue = github.issues.show(options.github_project, int(issue.id))
-        logging.warn( "skipping issue : %s" % (issue))
+        logging.warn("skipping issue : %s" % (issue))
     except RuntimeError:
         title = "%s - %s " % (issue.id, issue.summary)
         logging.info('will post issue:%s' % issue)
         logging.info("issue did not exist")
         git_issue = github.issues.open(options.github_project,
-            title = title,
-            body = issue.body
+            title=title,
+            body=issue.body
         )
     if issue.status == 'closed':
         github.issues.close(options.github_project, git_issue.number)
     if sync_comments is False:
         return git_issue
-    old_comments  = github.issues.comments(options.github_project, git_issue.number)
-    for i,comment in enumerate(issue.comments):
-
+    old_comments = github.issues.comments(options.github_project, git_issue.number)
+    for i, comment in enumerate(issue.comments):
         exists = False
         for old_c in old_comments:
             # issue status changes have empty bodies in google code , exclude those:
-            if bool(old_c.body) or old_c.body == comment.body :
+            if bool(old_c.body) or old_c.body == comment.body:
                 exists = True
                 logging.info("Found comment there, skipping")
                 break
@@ -130,6 +132,7 @@ def post_to_github(issue, sync_comments=True):
                 logging.exception("Failed to post comment %s for issue %s" % (i, issue))
 
     return git_issue
+
 
 def process_issues(issues_csv, sync_comments=True):
     reader = csv.DictReader(issues_csv)
