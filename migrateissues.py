@@ -11,6 +11,7 @@ options = None
 
 logging.basicConfig(level=logging.DEBUG)
 
+
 def get_url_content(url):
     h = httplib2.Http(".cache")
     resp, content = h.request(url, "GET")
@@ -23,20 +24,20 @@ class IssueComment(object):
         self.author = author
         self.user = options.github_user_name
 
-    @property    
+    @property
     def body (self):
         return ("%s - %s \n%s" % (self.author, self.created_at, self.body_raw)).encode('utf-8')
 
     def __repr__(self):
         return self.body.encode('utf-8')
-        
+
 class Issue(object):
 
     def __init__(self, issue_line):
         for k,v in issue_line.items():
             setattr(self, k.lower(), v)
         logging.info("Issue #%s: %s" % (self.id, self.summary))
-        self.get_original_data() 
+        self.get_original_data()
 
     def parse_date(self, node):
         created_at_raw = node.find('span', 'date').string
@@ -50,8 +51,8 @@ class Issue(object):
 
     def get_body(self,node):
         return node.find('pre').string
-	
-            
+
+
     def get_original_data(self):
         logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
@@ -71,21 +72,21 @@ class Issue(object):
                 comments.append(IssueComment(date, author, body))
             except:
                 pass
-        self.comments = comments    
+        self.comments = comments
         logging.info('got comments %s' %  len(comments))
 
     @property
-    def original_url(self):                             
+    def original_url(self):
         gcode_base_url = "http://code.google.com/p/%s/" % options.google_project_name
         return "%sissues/detail?id=%s" % (gcode_base_url, self.id)
-        
+
     def __repr__(self):
         return u"%s - %s " % (self.id, self.summary)
-            
+
 def download_issues():
     url = "http://code.google.com/p/" + options.google_project_name + "/issues/csv?can=1&q=&colspec=ID%20Type%20Status%20Priority%20Milestone%20Owner%20Summary"
     logging.info('Downloading %s' % url)
-    content = get_url_content(url)   
+    content = get_url_content(url)
     f = StringIO(content)
     return f
 
@@ -96,14 +97,14 @@ def post_to_github(issue, sync_comments=True):
         issue.status = 'closed'
     else:
         issue.status = 'open'
-    try:    
+    try:
         git_issue = github.issues.show(options.github_project, int(issue.id))
         logging.warn( "skipping issue : %s" % (issue))
     except RuntimeError:
         title = "%s - %s " % (issue.id, issue.summary)
-        logging.info('will post issue:%s' % issue)        
+        logging.info('will post issue:%s' % issue)
         logging.info("issue did not exist")
-        git_issue = github.issues.open(options.github_project, 
+        git_issue = github.issues.open(options.github_project,
             title = title,
             body = issue.body
         )
@@ -115,7 +116,7 @@ def post_to_github(issue, sync_comments=True):
     for i,comment in enumerate(issue.comments):
 
         exists = False
-        for old_c in old_comments:  
+        for old_c in old_comments:
             # issue status changes have empty bodies in google code , exclude those:
             if bool(old_c.body) or old_c.body == comment.body :
                 exists = True
@@ -127,18 +128,18 @@ def post_to_github(issue, sync_comments=True):
                 github.issues.comment(options.github_project, git_issue.number, comment)
             except:
                 logging.exception("Failed to post comment %s for issue %s" % (i, issue))
-            
-    return git_issue    
-    
+
+    return git_issue
+
 def process_issues(issues_csv, sync_comments=True):
     reader = csv.DictReader(issues_csv)
     issues = [Issue(issue_line) for issue_line in reader]
     [post_to_github(i, sync_comments) for i in issues]
-    
+
 
 if __name__ == "__main__":
-    import optparse         
-    import sys                          
+    import optparse
+    import sys
     usage = "usage: %prog [options]"
     parser = optparse.OptionParser(usage)
     parser.add_option('-g', '--google-project-name', action="store", dest="google_project_name", help="The project name (from the URL) from google code.")
@@ -147,9 +148,9 @@ if __name__ == "__main__":
     parser.add_option('-p', '--github-project', action="store", dest="github_project", help="The Github project name:: user-name/project-name")
     global options
     options, args = parser.parse_args(args=sys.argv, values=None)
-    try:               
+    try:
         issues_data = download_issues()
         process_issues(issues_data)
     except:
-        parser.print_help()    
+        parser.print_help()
         raise
