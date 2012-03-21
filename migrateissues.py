@@ -57,8 +57,13 @@ class Issue(object):
         logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
-        self.body = "%s\n\nOriginal link: %s" % (soup.find('td', 'vt issuedescription').find('pre').text, self.original_url)
-        self.created_at = self.parse_date(soup.find('td', 'vt issuedescription').find('span', 'date').string)
+        created_at = self.parse_date(soup.find('td', 'vt issuedescription').find('span', 'date').string)
+        self.body = "%s\n\nOriginal date: %s\nOriginal link: %s" % (
+            soup.find('td', 'vt issuedescription').find('pre').text,
+            created_at,
+            self.original_url
+        )
+        print self.body
         comments = []
         for node in soup.find_all('div', "issuecomment"):
             try:
@@ -107,8 +112,7 @@ def post_to_github(issue, sync_comments=True):
         logging.info("issue did not exist")
         git_issue = github.issues.open(options.github_project,
             title=title,
-            body=issue.body,
-            created_at=issue.created_at
+            body=issue.body
         )
     if issue.status == 'closed':
         github.issues.close(options.github_project, git_issue.number)
