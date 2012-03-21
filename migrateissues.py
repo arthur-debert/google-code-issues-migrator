@@ -104,7 +104,7 @@ def post_to_github(issue, sync_comments=True):
         git_issue = github.issues.show(options.github_project, int(issue.id))
         logging.warn("skipping issue : %s" % (issue))
     except RuntimeError:
-        title = "%s - %s " % (issue.id, issue.summary)
+        title = issue.summary
         logging.info('will post issue:%s' % issue)
         logging.info("issue did not exist")
         git_issue = github.issues.open(options.github_project,
