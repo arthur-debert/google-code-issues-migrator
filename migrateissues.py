@@ -71,7 +71,7 @@ class Issue(object):
                 author = self.get_user(node)
                 body = self.get_body(node)
 
-                if body != "(No comment was entered for this change.)":
+                if body != '' and body != "(No comment was entered for this change.)":
                     # only add comments that are actual comments.
                     comments.append(IssueComment(date, author, body))
             except:
