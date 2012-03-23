@@ -4,9 +4,10 @@ Some liberties have been taken (as we cannot, for example, know which google use
 
 Requirements:
 
-	* (httplib2)[http://code.google.com/p/httplib2/]
-	* (python github)[http://github.com/ask/python-github2]
-	
+* [httplib2](http://code.google.com/p/httplib2/) -- `pip install httplib2`
+* [python github](http://github.com/ask/python-github2) -- `pip install github2`
+* [BeautifulSoup4](http://www.crummy.com/software/BeautifulSoup/bs4/download/4.0/) -- `pip install BeautifulSoup4`
+
 Usage:
 	migrateissues.py [options]
 
