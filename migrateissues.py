@@ -1,6 +1,7 @@
 import csv
 import logging
 import datetime
+import re
 from StringIO import StringIO
 
 import httplib2
@@ -11,6 +12,20 @@ options = None
 
 logging.basicConfig(level=logging.DEBUG)
 
+g_statusre = \
+  '^('                                                         + \
+  'Issue has not had initial review yet'                 + '|' + \
+  'Problem reproduced \/ Need acknowledged'              + '|' + \
+  'Work on this issue has begun'                         + '|' + \
+  'Waiting on feedback or additional information'        + '|' + \
+  'Developer made source code changes, QA should verify' + '|' + \
+  'QA has verified that the fix worked'                  + '|' + \
+  'This was not a valid issue report'                    + '|' + \
+  'Unable to reproduce the issue'                        + '|' + \
+  'This report duplicates an existing issue'             + '|' + \
+  'We decided to not take action on this issue'          + '|' + \
+  'The requested non-coding task was completed'                + \
+  ')$'
 
 def get_url_content(url):
     h = httplib2.Http(".cache")
@@ -39,44 +54,71 @@ class Issue(object):
         for k, v in issue_line.items():
             setattr(self, k.lower(), v)
         logging.info("Issue #%s: %s" % (self.id, self.summary))
-        self.get_original_data()
+        self.get_original_data() 
 
-    def parse_date(self, date_string):
+    def parse_date(self, node):
+        datenode = node.find(attrs={'class' : 'date'})
+        datestring = datenode['title']
         try:
-            return datetime.datetime.strptime(date_string, '%b %d, %Y')
+            return datetime.datetime.strptime(datestring, '%a %b %d %H:%M:%S %Y')
         except ValueError:     # if can't parse time, just assume now
             return datetime.datetime.now()
 
     def get_user(self, node):
-        return node.find_all('a')[1].string
+        authornode = node.find(attrs={'class' : 'author'})
+        userhrefnode = authornode.find(attrs={'href' : re.compile('^\/u\/')})
+        return userhrefnode.string
 
     def get_body(self, node):
-        return node.find('pre').text
+        comment = unicode(node.find('pre').renderContents(), 'utf-8', 'replace')
+        return comment
+
+    def get_labels(self, soup):
+        self.labels = []
+        self.milestones = [] # Milestones are a form of label in googlecode
+        for node in soup.findAll(attrs = { 'class' : 'label' }):
+            label = unicode(re.sub('<\/?b>', '', node.renderContents()))
+            if re.match('^Milestone-', label):
+                self.milestones.append(re.sub('^Milestone-', '', label))
+            else:
+                self.labels.append(label)
+        return
+
+    def get_status(self, soup):
+        node = soup.find(name = 'span', attrs = { 'title' : re.compile(g_statusre) })
+        return node.find('pre').string
+        self.labels.append("Status-%s" % self.status)
+        return
 
     def get_original_data(self):
         logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
+        descriptionnode = soup.find(attrs={'class' : "cursor_off vt issuedescription"})
+        descriptionstring = unicode(descriptionnode.find('pre').renderContents(), 'utf-8', 'replace')
         created_at = self.parse_date(soup.find('td', 'vt issuedescription').find('span', 'date').string)
-        self.body = "%s\n\n\n_Original issue: %s (%s)_" % (
-            soup.find('td', 'vt issuedescription').find('pre').text,
-            self.original_url,
-            created_at.strftime('%Y-%m-%d')
-        )
+        self.body = unicode("%s\n\n\n_Original issue: %s (%s)_" % (
+			descriptionstring,
+			self.original_url,
+			self.created_at ))
         comments = []
-        for node in soup.find_all('div', "issuecomment"):
+        for node in soup.findAll(attrs={'class' : "cursor_off vt issuecomment"}):
             try:
                 date = self.parse_date(node.find('span', 'date').string)
                 author = self.get_user(node)
                 body = self.get_body(node)
 
-                if body != '' and "(No comment was entered for this change.)" not in body:
+                if not re.match('^\\n<i>\(No comment was entered for this change\.\)<\/i>\\n$', body):
                     # only add comments that are actual comments.
                     comments.append(IssueComment(date, author, body))
             except:
                 pass
         self.comments = comments
         logging.info('got comments %s' % len(comments))
+        self.get_labels(soup)
+        logging.info('got labels %s' % len(self.labels))
+        logging.info('got milestones %s' % len(self.milestones))
+        self.get_status(soup)
 
     @property
     def original_url(self):
@@ -98,7 +140,7 @@ def download_issues():
 def post_to_github(issue, sync_comments=True):
     logging.info('should post %s', issue)
     github = Github(username=options.github_user_name, api_token=options.github_api_token, requests_per_second=0.50)
-    if issue.status.lower() in "invalid closed fixed wontfix verified".lower():
+    if issue.status.lower()  in "invalid closed fixed wontfix verified worksforme duplicate done".lower():
         issue.status = 'closed'
     else:
         issue.status = 'open'
