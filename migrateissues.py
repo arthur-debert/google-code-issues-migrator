@@ -27,7 +27,12 @@ class IssueComment(object):
 
     @property
     def body(self):
-        return ("_%s - %s_\n%s" % (self.author, self.created_at.strftime('%Y-%m-%d'), self.body_raw)).encode('utf-8')
+        try:
+            return ("_%s - %s_\n%s" % (self.author, self.created_at.strftime('%Y-%m-%d'), self.body_raw)).encode('utf-8')
+        except:
+            import pdb, sys
+            e, m, tb = sys.exc_info()
+            pdb.post_mortem(tb)
 
     def __repr__(self):
         return self.body.encode('utf-8')
@@ -38,7 +43,7 @@ class Issue(object):
     def __init__(self, issue_line):
         for k, v in issue_line.items():
             setattr(self, k.lower(), v)
-        logging.info("Issue #%s: %s" % (self.id, self.summary))
+        logging.info("Issue #%s: %s" % (int(self.id), self.summary))
         self.get_original_data()
 
     def parse_date(self, date_string):
@@ -138,6 +143,9 @@ def post_to_github(issue, sync_comments=True):
 def process_issues(issues_csv, sync_comments=True):
     reader = csv.DictReader(issues_csv)
     issues = [Issue(issue_line) for issue_line in reader]
+    issues.sort(key=lambda i: int(i.id))
+    import pdb
+    pdb.set_trace()
     [post_to_github(i, sync_comments) for i in issues]
 
 
