@@ -113,7 +113,8 @@ def process_gcode_issues(existing_issues):
 
 def get_existing_github_issues():
     try:
-        existing_issues = github.issues.list_by_label(github_project, "imported")  # only include github issues labeled "imported" in our duplicate checking
+        existing_issues = github.issues.list(github_project, 'open') + github.issues.list(github_project, 'closed')
+        existing_issues = filter(lambda i: 'imported' in i.labels, existing_issues)
         existing_issues = dict(zip([str(i.title) for i in existing_issues], existing_issues))
     except:
         existing_issues = {}
