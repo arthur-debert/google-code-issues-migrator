@@ -2,22 +2,20 @@ This is a simple script to move issues from google code to github.
 
 Some liberties have been taken (as we cannot, for example, know which google user corresponds to other user on github). But most information is complete.
 
-Requirements:
+Required Python libraries:
 
-* [httplib2](http://code.google.com/p/httplib2/) -- `pip install httplib2`
+* [gdata](http://code.google.com/p/gdata-python-client/) -- `pip install gdata`
 * [python github](http://github.com/ask/python-github2) -- `pip install github2`
-* [BeautifulSoup4](http://www.crummy.com/software/BeautifulSoup/bs4/download/4.0/) -- `pip install BeautifulSoup4`
 
 Usage:
-	migrateissues.py [options]
+
+	migrate-issues.py [options] <google_project_name> <github_api_token> <github_user_name> <github_project>
+
+	  google_project_name 	The project name (from the URL) from google code
+	  github_api_token 	    Your Github api token
+	  github_user_name 	    The Github username
+	  github_project 	    The Github project name, e.g. username/project
 
 	Options:
 	  -h, --help            show this help message and exit
-	  -g GOOGLE_PROJECT_NAME, --google-project-name=GOOGLE_PROJECT_NAME
-	                        The project name (from the URL) from google code.
-	  -t GITHUB_API_TOKEN, --github-api-token=GITHUB_API_TOKEN
-	                        Yout Github api token
-	  -u GITHUB_USER_NAME, --github-user-name=GITHUB_USER_NAME
-	                        The Github username
-	  -p GITHUB_PROJECT, --github-project=GITHUB_PROJECT
-	                        The Github project name
+	  -d, --dry-run			don't modify anything on Github
