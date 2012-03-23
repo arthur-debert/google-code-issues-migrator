@@ -38,7 +38,7 @@ class Issue(object):
     def __init__(self, issue_line):
         for k, v in issue_line.items():
             setattr(self, k.lower(), v)
-        logging.info("Issue #%s: %s" % (int(self.id), self.summary))
+        logging.info("Issue #%s: %s" % (self.id, self.summary))
         self.get_original_data()
 
     def parse_date(self, date_string):
