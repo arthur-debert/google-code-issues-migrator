@@ -12,20 +12,19 @@ options = None
 
 logging.basicConfig(level=logging.DEBUG)
 
-g_statusre = \
-  '^('                                                         + \
-  'Issue has not had initial review yet'                 + '|' + \
-  'Problem reproduced \/ Need acknowledged'              + '|' + \
-  'Work on this issue has begun'                         + '|' + \
-  'Waiting on feedback or additional information'        + '|' + \
-  'Developer made source code changes, QA should verify' + '|' + \
-  'QA has verified that the fix worked'                  + '|' + \
-  'This was not a valid issue report'                    + '|' + \
-  'Unable to reproduce the issue'                        + '|' + \
-  'This report duplicates an existing issue'             + '|' + \
-  'We decided to not take action on this issue'          + '|' + \
-  'The requested non-coding task was completed'                + \
-  ')$'
+g_statusre = '^(' + '|'.join([
+    'Issue has not had initial review yet',
+    'Problem reproduced \/ Need acknowledged',
+    'Work on this issue has begun',
+    'Waiting on feedback or additional information',
+    'Developer made source code changes, QA should verify',
+    'QA has verified that the fix worked',
+    'This was not a valid issue report',
+    'Unable to reproduce the issue',
+    'This report duplicates an existing issue',
+    'We decided to not take action on this issue',
+    'The requested non-coding task was completed']) + ')$'
+
 
 def get_url_content(url):
     h = httplib2.Http(".cache")
@@ -42,7 +41,7 @@ class IssueComment(object):
 
     @property
     def body(self):
-        return ("_%s - %s_\n%s" % (self.author, self.created_at.strftime('%Y-%m-%d'), self.body_raw)).encode('utf-8')
+        return ("_From %s, %s_\n%s" % (self.author, self.created_at, self.body_raw)).encode('utf-8')
 
     def __repr__(self):
         return self.body.encode('utf-8')
@@ -54,30 +53,29 @@ class Issue(object):
         for k, v in issue_line.items():
             setattr(self, k.lower(), v)
         logging.info("Issue #%s: %s" % (self.id, self.summary))
-        self.get_original_data() 
+        self.get_original_data()
 
     def parse_date(self, node):
-        datenode = node.find(attrs={'class' : 'date'})
-        datestring = datenode['title']
+        date_string = node.find('span', 'date').attrs['title']
         try:
-            return datetime.datetime.strptime(datestring, '%a %b %d %H:%M:%S %Y')
+            return datetime.datetime.strptime(date_string, '%a %b %d %H:%M:%S %Y')
         except ValueError:     # if can't parse time, just assume now
             return datetime.datetime.now()
 
     def get_user(self, node):
-        authornode = node.find(attrs={'class' : 'author'})
-        userhrefnode = authornode.find(attrs={'href' : re.compile('^\/u\/')})
+        authornode = node.find(attrs={'class': 'author'})
+        userhrefnode = authornode.find(attrs={'href': re.compile('^\/u\/')})
         return userhrefnode.string
 
     def get_body(self, node):
-        comment = unicode(node.find('pre').renderContents(), 'utf-8', 'replace')
+        comment = node.pre.decode_contents().encode('utf-8')
         return comment
 
     def get_labels(self, soup):
         self.labels = []
-        self.milestones = [] # Milestones are a form of label in googlecode
-        for node in soup.findAll(attrs = { 'class' : 'label' }):
-            label = unicode(re.sub('<\/?b>', '', node.renderContents()))
+        self.milestones = []  # Milestones are a form of label in googlecode
+        for node in soup.find_all(attrs={'class': 'label'}):
+            label = re.sub('<\/?b>', '', node.decode_contents()).encode('utf-8')
             if re.match('^Milestone-', label):
                 self.milestones.append(re.sub('^Milestone-', '', label))
             else:
@@ -85,8 +83,8 @@ class Issue(object):
         return
 
     def get_status(self, soup):
-        node = soup.find(name = 'span', attrs = { 'title' : re.compile(g_statusre) })
-        return node.find('pre').string
+        node = soup.find(name='span', attrs={'title': re.compile(g_statusre)})
+        self.status = node.string
         self.labels.append("Status-%s" % self.status)
         return
 
@@ -94,17 +92,18 @@ class Issue(object):
         logging.info("GET %s" % self.original_url)
         content = get_url_content(self.original_url)
         soup = BeautifulSoup(content)
-        descriptionnode = soup.find(attrs={'class' : "cursor_off vt issuedescription"})
-        descriptionstring = unicode(descriptionnode.find('pre').renderContents(), 'utf-8', 'replace')
-        created_at = self.parse_date(soup.find('td', 'vt issuedescription').find('span', 'date').string)
+        descriptionnode = soup.find(attrs={'class': "cursor_off vt issuedescription"})
+        descriptionstring = descriptionnode.find('pre').decode_contents().encode('utf-8')
+        self.created_at = self.parse_date(soup.find('td', 'vt issuedescription'))
+
         self.body = unicode("%s\n\n\n_Original issue: %s (%s)_" % (
-			descriptionstring,
-			self.original_url,
-			self.created_at ))
+            descriptionstring,
+            self.original_url,
+            self.created_at))
         comments = []
-        for node in soup.findAll(attrs={'class' : "cursor_off vt issuecomment"}):
+        for node in soup.find_all(attrs={'class': "cursor_off vt issuecomment"}):
             try:
-                date = self.parse_date(node.find('span', 'date').string)
+                date = self.parse_date(node)
                 author = self.get_user(node)
                 body = self.get_body(node)
 
