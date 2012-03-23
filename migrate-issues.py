@@ -25,12 +25,12 @@ def output(string):
     sys.stdout.flush()
 
 
-def parse_gcode_issue_id(id_text):
+def parse_gcode_id(id_text):
     return re.search('\d+$', id_text).group(0)
 
 
 def add_issue_to_github(issue):
-    id = parse_gcode_issue_id(issue.id.text)
+    id = parse_gcode_id(issue.id.text)
     title = issue.title.text
     link = issue.link[1].href
     content = issue.content.text
@@ -41,7 +41,7 @@ def add_issue_to_github(issue):
 
     github_issue = None
 
-    if options.dry_run is False:
+    if not options.dry_run:
         github_issue = github.issues.open(github_project, title=title, body=body.encode('utf-8'))
         github.issues.add_label(github_project, github_issue.number, "imported")
         if issue.status.text.lower() in "invalid closed fixed wontfix verified done duplicate".lower():
@@ -51,7 +51,7 @@ def add_issue_to_github(issue):
     if len(issue.label) > 0:
         output(', adding labels')
         for label in issue.label:
-            if options.dry_run is False:
+            if not options.dry_run:
                 github.issues.add_label(github_project, github_issue.number, label.text.encode('utf-8'))
             output('.')
 
@@ -81,7 +81,7 @@ def add_comments_to_issue(github_issue, gcode_issue_id):
 
 
 def add_comment_to_github(comment, github_issue):
-    id = parse_gcode_issue_id(comment.id.text)
+    id = parse_gcode_id(comment.id.text)
     author = comment.author[0].name.text
     date = dateutil.parser.parse(comment.published.text).strftime('%B %d, %Y %H:%M:%S')
     content = comment.content.text
@@ -89,7 +89,7 @@ def add_comment_to_github(comment, github_issue):
 
     logging.info('Adding comment %s', id)
 
-    if options.dry_run is False:
+    if not options.dry_run:
         github.issues.comment(github_project, github_issue.number, body.encode('utf-8'))
 
 
@@ -101,7 +101,7 @@ def process_gcode_issues(existing_issues):
         if len(issues_feed.entry) == 0:
             break
         for issue in issues_feed.entry:
-            id = parse_gcode_issue_id(issue.id.text)
+            id = parse_gcode_id(issue.id.text)
             if issue.title.text in existing_issues.keys():
                 github_issue = existing_issues[issue.title.text]
                 output('Not adding issue %s (exists)' % (id))
@@ -113,7 +113,7 @@ def process_gcode_issues(existing_issues):
 
 def get_existing_github_issues():
     try:
-        existing_issues = github.issues.list_by_label(github_project, "imported")
+        existing_issues = github.issues.list_by_label(github_project, "imported")  # only include github issues labeled "imported" in our duplicate checking
         existing_issues = dict(zip([str(i.title) for i in existing_issues], existing_issues))
     except:
         existing_issues = {}
