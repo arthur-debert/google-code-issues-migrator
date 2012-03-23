@@ -58,11 +58,12 @@ def add_issue_to_github(issue):
     max_results = GOOGLE_MAX_RESULTS
     while True:
         comments_feed = google.get_comments(google_project_name, id, query=gdata.projecthosting.client.Query(start_index=start_index, max_results=max_results))
-        if len(comments_feed.entry) == 0:
+        comments = filter(lambda e: e.content.text is not None, comments_feed.entry)
+        if len(comments) == 0:
             break
-        if start_index is 1:
+        if start_index == 1:
             output(', adding comments')
-        for comment in comments_feed.entry:
+        for comment in comments:
             add_comment_to_github(comment, github_issue)
             output('.')
         start_index += max_results
@@ -74,7 +75,7 @@ def add_comment_to_github(comment, github_issue):
     author = comment.author[0].name.text
     date = dateutil.parser.parse(comment.published.text).strftime('%B %d, %Y %H:%M:%S')
     content = comment.content.text
-    body = '_%s on %s:_\n%s' % (author, date, content)
+    body = '_From %s on %s:_\n%s' % (author, date, content)
 
     logging.info('Adding comment %s', id)
 
