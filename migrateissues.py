@@ -27,12 +27,7 @@ class IssueComment(object):
 
     @property
     def body(self):
-        try:
-            return ("_%s - %s_\n%s" % (self.author, self.created_at.strftime('%Y-%m-%d'), self.body_raw)).encode('utf-8')
-        except:
-            import pdb, sys
-            e, m, tb = sys.exc_info()
-            pdb.post_mortem(tb)
+        return ("_%s - %s_\n%s" % (self.author, self.created_at.strftime('%Y-%m-%d'), self.body_raw)).encode('utf-8')
 
     def __repr__(self):
         return self.body.encode('utf-8')
@@ -50,7 +45,7 @@ class Issue(object):
         try:
             return datetime.datetime.strptime(date_string, '%b %d, %Y')
         except ValueError:     # if can't parse time, just assume now
-            return datetime.datetime.now
+            return datetime.datetime.now()
 
     def get_user(self, node):
         return node.find_all('a')[1].string
@@ -144,8 +139,6 @@ def process_issues(issues_csv, sync_comments=True):
     reader = csv.DictReader(issues_csv)
     issues = [Issue(issue_line) for issue_line in reader]
     issues.sort(key=lambda i: int(i.id))
-    import pdb
-    pdb.set_trace()
     [post_to_github(i, sync_comments) for i in issues]
 
 
