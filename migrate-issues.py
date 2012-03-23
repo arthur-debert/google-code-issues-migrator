@@ -30,7 +30,7 @@ def add_issue_to_github(issue):
     title = issue.title.text
     link = issue.link[1].href
     content = issue.content.text
-    date = dateutil.parser.parse(issue.published).strftime('%B %d, %Y %H:%M:%S')
+    date = dateutil.parser.parse(issue.published.text).strftime('%B %d, %Y %H:%M:%S')
     body = '%s\n\n\n_Original issue: %s (%s)_' % (content, link, date)
 
     output('Adding issue %s' % (id))
@@ -102,7 +102,8 @@ if __name__ == "__main__":
     options, args = parser.parse_args()
 
     if len(args) != 4:
-        parser.error('incorrect number of arguments')
+        parser.print_help()
+        sys.exit()
 
     google_project_name, github_api_token, github_user_name, github_project = args
 
