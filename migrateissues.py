@@ -1,155 +1,145 @@
-import csv
+#!/usr/bin/env python
+
+import optparse
+import sys
+import re
 import logging
-import datetime
-from StringIO import StringIO
+import dateutil.parser
 
-import httplib2
 from github2.client import Github
-from BeautifulSoup import BeautifulSoup
 
-options = None
+import gdata.projecthosting.client
+import gdata.projecthosting.data
+import gdata.gauth
+import gdata.client
+import gdata.data
 
-logging.basicConfig(level=logging.DEBUG)
+GITHUB_REQUESTS_PER_SECOND = 0.5
+GOOGLE_MAX_RESULTS = 25
 
-def get_url_content(url):
-    h = httplib2.Http(".cache")
-    resp, content = h.request(url, "GET")
-    return content
+logging.basicConfig(level=logging.ERROR)
 
-class IssueComment(object):
-    def __init__(self, date, author, body):
-        self.created_at  = date
-        self.body_raw = body
-        self.author = author
-        self.user = options.github_user_name
 
-    @property    
-    def body (self):
-        return ("%s - %s \n%s" % (self.author, self.created_at, self.body_raw)).encode('utf-8')
+def output(string):
+    sys.stdout.write(string)
+    sys.stdout.flush()
 
-    def __repr__(self):
-        return self.body.encode('utf-8')
-        
-class Issue(object):
 
-    def __init__(self, issue_line):
-        for k,v in issue_line.items():
-            setattr(self, k.lower(), v)
-        logging.info("Issue #%s: %s" % (self.id, self.summary))
-        self.get_original_data() 
+def parse_gcode_id(id_text):
+    return re.search('\d+$', id_text).group(0)
 
-    def parse_date(self, node):
-        created_at_raw = node.find('span', 'date').string
-        try:
-            return datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
-        except ValueError:     # if can't parse time, just assume now
-            return datetime.datetime.now
 
-    def get_user(self, node):
-        return node.findAll('a')[1].string
+def add_issue_to_github(issue):
+    id = parse_gcode_id(issue.id.text)
+    title = issue.title.text
+    link = issue.link[1].href
+    content = issue.content.text
+    date = dateutil.parser.parse(issue.published.text).strftime('%B %d, %Y %H:%M:%S')
+    body = '%s\n\n\n_Original issue: %s (%s)_' % (content, link, date)
 
-    def get_body(self,node):
-        return node.find('pre').string
-	
-            
-    def get_original_data(self):
-        logging.info("GET %s" % self.original_url)
-        content = get_url_content(self.original_url)
-        soup = BeautifulSoup(content)
-        self.body = "%s</br>Original link: %s" % (soup.find('td', 'vt issuedescription').find('pre') , self.original_url)
-        created_at_raw = soup.find('td', 'vt issuedescription').find('span', 'date').string
-        try:
-            self.created_at = datetime.datetime.strptime(created_at_raw, '%b %d, %Y')
-        except ValueError:     # if can't parse time, just assume now
-            self.created_at = datetime.datetime.now
-        comments = []
-        for node in soup.findAll('td', "vt issuecomment"):
-            try:
-                date = self.parse_date(node)
-                author  = self.get_user(node)
-                body = self.get_body(node)
-                comments.append(IssueComment(date, author, body))
-            except:
-                pass
-        self.comments = comments    
-        logging.info('got comments %s' %  len(comments))
+    output('Adding issue %s' % (id))
 
-    @property
-    def original_url(self):                             
-        gcode_base_url = "http://code.google.com/p/%s/" % options.google_project_name
-        return "%sissues/detail?id=%s" % (gcode_base_url, self.id)
-        
-    def __repr__(self):
-        return u"%s - %s " % (self.id, self.summary)
-            
-def download_issues():
-    url = "http://code.google.com/p/" + options.google_project_name + "/issues/csv?can=1&q=&colspec=ID%20Type%20Status%20Priority%20Milestone%20Owner%20Summary"
-    logging.info('Downloading %s' % url)
-    content = get_url_content(url)   
-    f = StringIO(content)
-    return f
+    github_issue = None
 
-def post_to_github(issue, sync_comments=True):
-    logging.info('should post %s', issue)
-    github = Github(username=options.github_user_name, api_token=options.github_api_token, requests_per_second=1)
-    if issue.status.lower()  in "invalid closed fixed wontfix verified".lower():
-        issue.status = 'closed'
-    else:
-        issue.status = 'open'
-    try:    
-        git_issue = github.issues.show(options.github_project, int(issue.id))
-        logging.warn( "skipping issue : %s" % (issue))
-    except RuntimeError:
-        title = "%s - %s " % (issue.id, issue.summary)
-        logging.info('will post issue:%s' % issue)        
-        logging.info("issue did not exist")
-        git_issue = github.issues.open(options.github_project, 
-            title = title,
-            body = issue.body
-        )
-    if issue.status == 'closed':
-        github.issues.close(options.github_project, git_issue.number)
-    if sync_comments is False:
-        return git_issue
-    old_comments  = github.issues.comments(options.github_project, git_issue.number)
-    for i,comment in enumerate(issue.comments):
+    if not options.dry_run:
+        github_issue = github.issues.open(github_project, title=title, body=body.encode('utf-8'))
+        github.issues.add_label(github_project, github_issue.number, "imported")
+        if issue.status.text.lower() in "invalid closed fixed wontfix verified done duplicate".lower():
+            github.issues.close(github_project, github_issue.number)
 
-        exists = False
-        for old_c in old_comments:  
-            # issue status changes have empty bodies in google code , exclude those:
-            if bool(old_c.body) or old_c.body == comment.body :
-                exists = True
-                logging.info("Found comment there, skipping")
-                break
-        if not exists:
-            #logging.info('posting comment %s', comment.body.encode('utf-8'))
-            try:
-                github.issues.comment(options.github_project, git_issue.number, comment)
-            except:
-                logging.exception("Failed to post comment %s for issue %s" % (i, issue))
-            
-    return git_issue    
-    
-def process_issues(issues_csv, sync_comments=True):
-    reader = csv.DictReader(issues_csv)
-    issues = [Issue(issue_line) for issue_line in reader]
-    [post_to_github(i, sync_comments) for i in issues]
-    
+    # Add any labels
+    if len(issue.label) > 0:
+        output(', adding labels')
+        for label in issue.label:
+            if not options.dry_run:
+                github.issues.add_label(github_project, github_issue.number, label.text.encode('utf-8'))
+            output('.')
+
+    return github_issue
+
+
+def add_comments_to_issue(github_issue, gcode_issue_id):
+    # Add any comments
+    start_index = 1
+    max_results = GOOGLE_MAX_RESULTS
+    while True:
+        comments_feed = google.get_comments(google_project_name, gcode_issue_id, query=gdata.projecthosting.client.Query(start_index=start_index, max_results=max_results))
+        comments = filter(lambda c: c.content.text is not None, comments_feed.entry)              # exclude empty comments
+        existing_comments = github.issues.comments(github_project, github_issue.number)
+        existing_comments = filter(lambda c: c.body[0:5] == '_From', existing_comments)           # only look at existing github comments that seem to have been imported
+        existing_comments = map(lambda c: re.sub(r'^_From.+_\n', '', c.body), existing_comments)  # get the existing comments' bodies as they appear in gcode
+        comments = filter(lambda c: c.content.text not in existing_comments, comments)            # exclude gcode comments that already exist in github
+        if len(comments) == 0:
+            break
+        if start_index == 1:
+            output(', adding comments')
+        for comment in comments:
+            add_comment_to_github(comment, github_issue)
+            output('.')
+        start_index += max_results
+    output('\n')
+
+
+def add_comment_to_github(comment, github_issue):
+    id = parse_gcode_id(comment.id.text)
+    author = comment.author[0].name.text
+    date = dateutil.parser.parse(comment.published.text).strftime('%B %d, %Y %H:%M:%S')
+    content = comment.content.text
+    body = '_From %s on %s:_\n%s' % (author, date, content)
+
+    logging.info('Adding comment %s', id)
+
+    if not options.dry_run:
+        github.issues.comment(github_project, github_issue.number, body.encode('utf-8'))
+
+
+def process_gcode_issues(existing_issues):
+    start_index = 1
+    max_results = GOOGLE_MAX_RESULTS
+    while True:
+        issues_feed = google.get_issues(google_project_name, query=gdata.projecthosting.client.Query(start_index=start_index, max_results=max_results))
+        if len(issues_feed.entry) == 0:
+            break
+        for issue in issues_feed.entry:
+            id = parse_gcode_id(issue.id.text)
+            if issue.title.text in existing_issues.keys():
+                github_issue = existing_issues[issue.title.text]
+                output('Not adding issue %s (exists)' % (id))
+            else:
+                github_issue = add_issue_to_github(issue)
+            add_comments_to_issue(github_issue, id)
+        start_index += max_results
+
+
+def get_existing_github_issues():
+    try:
+        existing_issues = github.issues.list(github_project, 'open') + github.issues.list(github_project, 'closed')
+        existing_issues = filter(lambda i: 'imported' in i.labels, existing_issues)
+        existing_issues = dict(zip([str(i.title) for i in existing_issues], existing_issues))
+    except:
+        existing_issues = {}
+    return existing_issues
+
 
 if __name__ == "__main__":
-    import optparse         
-    import sys                          
-    usage = "usage: %prog [options]"
-    parser = optparse.OptionParser(usage)
-    parser.add_option('-g', '--google-project-name', action="store", dest="google_project_name", help="The project name (from the URL) from google code.")
-    parser.add_option('-t', '--github-api-token', action="store", dest="github_api_token", help="Your Github api token")
-    parser.add_option('-u', '--github-user-name', action="store", dest="github_user_name", help="The Github username")
-    parser.add_option('-p', '--github-project', action="store", dest="github_project", help="The Github project name:: user-name/project-name")
-    global options
-    options, args = parser.parse_args(args=sys.argv, values=None)
-    try:               
-        issues_data = download_issues()
-        process_issues(issues_data)
+    usage = "usage: %prog [options] <google_project_name> <github_api_token> <github_user_name> <github_project>"
+    description = "Migrate all issues from a Google Code project to a Github project."
+    parser = optparse.OptionParser(usage=usage, description=description)
+    parser.add_option('-d', '--dry-run', action="store_true", dest="dry_run", help="Don't modify anything on Github", default=False)
+    options, args = parser.parse_args()
+
+    if len(args) != 4:
+        parser.print_help()
+        sys.exit()
+
+    google_project_name, github_api_token, github_user_name, github_project = args
+
+    google = gdata.projecthosting.client.ProjectHostingClient()
+    github = Github(username=github_user_name, api_token=github_api_token, requests_per_second=GITHUB_REQUESTS_PER_SECOND)
+
+    try:
+        existing_issues = get_existing_github_issues()
+        process_gcode_issues(existing_issues)
     except:
-        parser.print_help()    
+        parser.print_help()
         raise
