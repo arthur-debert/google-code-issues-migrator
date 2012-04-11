@@ -2,6 +2,8 @@ This is a simple script to move issues from google code to github.
 
 Some liberties have been taken (as we cannot, for example, know which google user corresponds to other user on github). But most information is complete.
 
+This script can be run repeatedly and will just pull in new issues and new comments without mucking up what's already on github.
+
 Required Python libraries:
 
 * [gdata](http://code.google.com/p/gdata-python-client/) -- `pip install gdata`
