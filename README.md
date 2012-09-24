@@ -7,17 +7,18 @@ This script can be run repeatedly and will just pull in new issues and new comme
 Required Python libraries:
 
 * [gdata](http://code.google.com/p/gdata-python-client/) -- `pip install gdata`
-* [python github](http://github.com/ask/python-github2) -- `pip install github2`
+* [PyGithub](https://github.com/jacquev6/PyGithub/) -- `pip install PyGithub`
 
 Usage:
 
-	migrate-issues.py [options] <google_project_name> <github_api_token> <github_user_name> <github_project>
+	migrate-issues.py [options] <google_project_name> <github_user_name> <github_project>
 
 	  google_project_name 	The project name (from the URL) from google code
-	  github_api_token 	    Your Github api token
 	  github_user_name 	    The Github username
 	  github_project 	    The Github project name, e.g. username/project
 
 	Options:
 	  -h, --help            show this help message and exit
 	  -d, --dry-run			don't modify anything on Github
+
+        You will be prompted for your github password.
