@@ -81,10 +81,17 @@ def add_issue_to_github(issue):
         github_issue = github_repo.create_issue(title, body = body.encode("utf-8"))
         github_issue.edit(state = issue.state.text)
 
+        # Add an 'imported' tag so it's easy to identify issues that we created
+
         try: import_label = github_repo.get_label("imported")
         except GithubException:
             import_label = github_repo.create_label("imported", "FFFFFF")
         github_issue.add_to_labels(import_label)
+
+    # Assigns issues that originally had an owner to the current user
+
+    if issue.owner and options.assign_owner and not options.dry_run:
+        github_issue.edit(assignee = github.get_user(github_user.login))
 
     # Convert Google Code labels to Github tags where possible
 
@@ -138,8 +145,6 @@ def add_comments_to_issue(github_issue, gcode_issue_id):
             output(".")
         start_index += max_results
 
-    output("\n")
-
 
 def add_comment_to_github(comment, github_issue):
 
@@ -181,6 +186,7 @@ def process_gcode_issues(existing_issues):
             else: github_issue = add_issue_to_github(issue)
             if github_issue:
                 add_comments_to_issue(github_issue, gid)
+            output("\n")
         start_index += max_results
 
 
@@ -216,6 +222,7 @@ if __name__ == "__main__":
     parser = optparse.OptionParser(usage = usage, description = description)
 
     parser.add_option("-d", "--dry-run", action = "store_true", dest = "dry_run", help = "Don't modify anything on Github", default = False)
+    parser.add_option("-a", "--assign-owner", action = "store_true", dest = "assign_owner", help = "Assign owned tickets to the Github user", default = False)
 
     options, args = parser.parse_args()
 
@@ -228,7 +235,8 @@ if __name__ == "__main__":
 
     google = gdata.projecthosting.client.ProjectHostingClient()
     github = Github(github_user_name, github_password)
-    github_repo = github.get_user().get_repo(github_project)
+    github_user = github.get_user()
+    github_repo = github_user.get_repo(github_project)
 
     try:
         existing_issues = get_existing_github_issues()
