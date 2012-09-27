@@ -80,7 +80,7 @@ def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
     gid = parse_gcode_id(issue.id.text)
-    state = issue.state.text
+    status = issue.status.text.lower()
     title = github_escape(issue.title.text)
     link = issue.link[1].href
     author = issue.author[0].name.text
@@ -97,7 +97,7 @@ def add_issue_to_github(issue):
     if not options.dry_run:
 
         github_issue = github_repo.create_issue(title, body = body.encode("utf-8"))
-        github_issue.edit(state = state)
+        github_issue.edit(state = issue.state.text)
 
         # Add an 'imported' tag so it's easy to identify issues that we created
 
@@ -105,8 +105,8 @@ def add_issue_to_github(issue):
 
         # Add additional tags based on the issue's state
 
-        if state in STATE_MAPPING:
-            github_issue.add_to_labels(github_label(state))
+        if status in STATE_MAPPING:
+            github_issue.add_to_labels(github_label(status))
 
     # Assigns issues that originally had an owner to the current user
 
