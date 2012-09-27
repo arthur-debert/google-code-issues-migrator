@@ -117,6 +117,8 @@ def add_issue_to_github(issue):
     if issue.label:
         output(", adding labels")
         for label in issue.label:
+            if label.text.startswith("Priority-") and options.omit_priority:
+                continue
             label_text = LABEL_MAPPING.get(label.text, label.text)
             if not options.dry_run:
                 github_issue.add_to_labels(github_label(label_text))
@@ -239,6 +241,7 @@ if __name__ == "__main__":
 
     parser.add_option("-d", "--dry-run", action = "store_true", dest = "dry_run", help = "Don't modify anything on Github", default = False)
     parser.add_option("-a", "--assign-owner", action = "store_true", dest = "assign_owner", help = "Assign owned tickets to the Github user", default = False)
+    parser.add_option("-p", "--omit-priority", action = "store_true", dest = "omit_priority", help = "Don't migrate priority labels", default = False)
 
     options, args = parser.parse_args()
 
