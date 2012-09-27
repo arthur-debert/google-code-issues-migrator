@@ -23,14 +23,14 @@ logging.basicConfig(level = logging.ERROR)
 
 GOOGLE_MAX_RESULTS = 25
 
-# Mapping from Google Code issue labels to Github tags
+# Mapping from Google Code issue labels to Github labels
 
 LABEL_MAPPING = {
     'Type-Defect' : "bug",
     'Type-Enhancement' : "enhancement"
 }
 
-# Mapping from Google Code issue states to Github tags
+# Mapping from Google Code issue states to Github labels
 
 STATE_MAPPING = {
     'invalid': "invalid",
@@ -55,9 +55,11 @@ def github_label(name, color = "FFFFFF"):
 
     """ Returns the Github label with the given name, creating it if necessary. """
 
-    try: return github_repo.get_label(name)
-    except GithubException:
-        return github_repo.create_label(name, color)
+    try: return label_cache[name]
+    except KeyError:
+        try: return label_cache.setdefault(name, github_repo.get_label(name))
+        except GithubException:
+            return label_cache.setdefault(name, github_repo.create_label(name, color))
 
 
 def parse_gcode_id(id_text):
@@ -87,43 +89,45 @@ def add_issue_to_github(issue):
     content = issue.content.text
     date = parse_gcode_date(issue.published.text)
 
+    # Build a list of labels to apply to the new issue, including an 'imported' tag that
+    # we can use to identify this issue as one that's passed through migration.
+
+    labels = ["imported"]
+
+    # Convert Google Code labels to Github labels where possible
+
+    if issue.label:
+        for label in issue.label:
+            if label.text.startswith("Priority-") and options.omit_priority:
+                continue
+            labels.append(LABEL_MAPPING.get(label.text, label.text))
+
+    # Add additional labels based on the issue's state
+
+    if status in STATE_MAPPING:
+        labels.append(STATE_MAPPING[status])
+
+    # Add the new Github issue with its labels and a header identifying it as migrated
+
+    github_issue = None
+
     header = "_Original author: %s (%s)_" % (author, date)
     body = github_escape("%s\n\n%s\n\n\n_Original issue: %s_" % (header, content, link))
 
     output("Adding issue %s" % gid)
 
-    github_issue = None
-
     if not options.dry_run:
-
-        github_issue = github_repo.create_issue(title, body = body.encode("utf-8"))
-        github_issue.edit(state = issue.state.text)
-
-        # Add an 'imported' tag so it's easy to identify issues that we created
-
-        github_issue.add_to_labels(github_label("imported"))
-
-        # Add additional tags based on the issue's state
-
-        if status in STATE_MAPPING:
-            github_issue.add_to_labels(github_label(status))
+        github_labels = [ github_label(label) for label in labels ]
+        github_issue = github_repo.create_issue(title, body = body.encode("utf-8"), labels = github_labels)
+        if issue.state.text != "open":
+            github_issue.edit(state = issue.state.text)
 
     # Assigns issues that originally had an owner to the current user
 
-    if issue.owner and options.assign_owner and not options.dry_run:
-        github_issue.edit(assignee = github.get_user(github_user.login))
-
-    # Convert Google Code labels to Github tags where possible
-
-    if issue.label:
-        output(", adding labels")
-        for label in issue.label:
-            if label.text.startswith("Priority-") and options.omit_priority:
-                continue
-            label_text = LABEL_MAPPING.get(label.text, label.text)
-            if not options.dry_run:
-                github_issue.add_to_labels(github_label(label_text))
-            output(".")
+    if issue.owner and options.assign_owner:
+        assignee = github.get_user(github_user.login)
+        if not options.dry_run:
+            github_issue.edit(assignee = assignee)
 
     return github_issue
 
@@ -249,6 +253,8 @@ if __name__ == "__main__":
     if len(args) != 3:
         parser.print_help()
         sys.exit()
+
+    label_cache = {}    # Cache Github tags, to avoid unnecessary API requests
 
     google_project_name, github_user_name, github_project = args
     github_password = getpass.getpass("Github password: ")
