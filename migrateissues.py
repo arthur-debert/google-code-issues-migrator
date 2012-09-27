@@ -23,11 +23,18 @@ logging.basicConfig(level = logging.ERROR)
 
 GOOGLE_MAX_RESULTS = 25
 
-# Mapping from Google Code issue types to Github labels
+# Mapping from Google Code issue labels to Github tags
 
 LABEL_MAPPING = {
     'Type-Defect' : "bug",
     'Type-Enhancement' : "enhancement"
+}
+
+# Mapping from Google Code issue states to Github tags
+
+STATE_MAPPING = {
+    'invalid': "invalid",
+    'duplicate': "duplicate"
 }
 
 
@@ -72,6 +79,7 @@ def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
     gid = parse_gcode_id(issue.id.text)
+    state = issue.state.text
     title = github_escape(issue.title.text)
     link = issue.link[1].href
     author = issue.author[0].name.text
@@ -88,14 +96,16 @@ def add_issue_to_github(issue):
     if not options.dry_run:
 
         github_issue = github_repo.create_issue(title, body = body.encode("utf-8"))
-        github_issue.edit(state = issue.state.text)
+        github_issue.edit(state = state)
 
         # Add an 'imported' tag so it's easy to identify issues that we created
 
-        try: import_label = github_repo.get_label("imported")
-        except GithubException:
-            import_label = github_repo.create_label("imported", "FFFFFF")
         github_issue.add_to_labels(github_label("imported"))
+
+        # Add additional tags based on the issue's state
+
+        if state in STATE_MAPPING:
+            github_issue.add_to_labels(github_label(state))
 
     # Assigns issues that originally had an owner to the current user
 
