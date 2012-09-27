@@ -49,13 +49,6 @@ def output(string):
     sys.stdout.flush()
 
 
-def github_escape(string):
-
-    """ Returns a copy of the string sanitized for use in Github. """
-
-    return string.replace("%", "&#37;")
-
-
 def github_label(name, color = "FFFFFF"):
 
     """ Returns the Github label with the given name, creating it if necessary. """
@@ -88,7 +81,7 @@ def add_issue_to_github(issue):
 
     gid = parse_gcode_id(issue.id.text)
     status = issue.status.text.lower()
-    title = github_escape(issue.title.text)
+    title = issue.title.text
     link = issue.link[1].href
     author = issue.author[0].name.text
     content = issue.content.text
@@ -124,7 +117,7 @@ def add_issue_to_github(issue):
     github_issue = None
 
     header = "_Original author: %s (%s)_" % (author, date)
-    body = github_escape("%s\n\n%s\n\n\n_Original issue: %s_" % (header, content, link))
+    body = "%s\n\n%s\n\n\n_Original issue: %s_" % (header, content, link)
 
     output("Adding issue %s" % gid)
 
@@ -190,7 +183,7 @@ def add_comment_to_github(comment, github_issue):
     date = parse_gcode_date(comment.published.text)
     content = comment.content.text
 
-    body = github_escape("_From %s on %s_\n%s" % (author, date, content))
+    body = "_From %s on %s_\n%s" % (author, date, content)
 
     logging.info("Adding comment %s", gid)
 
