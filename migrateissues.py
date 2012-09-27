@@ -203,6 +203,7 @@ def process_gcode_issues(existing_issues):
     """ Migrates all Google Code issues in the given dictionary to Github. """
 
     start_index = 1
+    previous_gid = 0
     max_results = GOOGLE_MAX_RESULTS
 
     while True:
@@ -215,13 +216,34 @@ def process_gcode_issues(existing_issues):
 
         for issue in issues_feed.entry:
             gid = parse_gcode_id(issue.id.text)
+
+            # If we're trying to do a complete migration to a fresh Github project, and
+            # want to keep the issue numbers synced with Google Code's, then we need to
+            # watch out for the fact that Google Code sometimes skips issue IDs.  We'll
+            # work around this by adding dummy issues until the numbers match again.
+
+            if options.synchronize_ids and previous_gid + 1 < gid:
+                while previous_gid + 1 < gid:
+                    title = "Google Code skipped issue %s" % (previous_gid + 1)
+                    if title not in existing_issues:
+                        body = "_Skipping this issue number to maintain synchronization with Google Code issue IDs._"
+                        github_issue = github_repo.create_issue(title, body = body, labels = [github_label("imported")])
+                        github_issue.edit(state = "closed")
+                        previous_gid += 1
+
+            # Add the issue and its comments to Github, if we haven't already
+
             if issue.title.text in existing_issues:
                 github_issue = existing_issues[issue.title.text]
                 output("Not adding issue %s (exists)" % gid)
             else: github_issue = add_issue_to_github(issue)
+
             if github_issue:
                 add_comments_to_issue(github_issue, gid)
             output("\n")
+
+            previous_gid = gid
+
         start_index += max_results
 
 
@@ -261,6 +283,7 @@ if __name__ == "__main__":
 
     parser.add_option("-d", "--dry-run", action = "store_true", dest = "dry_run", help = "Don't modify anything on Github", default = False)
     parser.add_option("-a", "--assign-owner", action = "store_true", dest = "assign_owner", help = "Assign owned tickets to the Github user", default = False)
+    parser.add_option("-s", "--synchronize-ids", action = "store_true", dest = "synchronize_ids", help = "Ensure that migrated issues keep the same ID", default = False)
     parser.add_option("-p", "--omit-priority", action = "store_true", dest = "omit_priority", help = "Don't migrate priority labels", default = False)
 
     options, args = parser.parse_args()
