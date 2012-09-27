@@ -221,6 +221,8 @@ def get_existing_github_issues():
 
     """
 
+    output("Retrieving existing Github issues...\n")
+
     try:
 
         open_issues = list(github_repo.get_issues(state = "open"))
@@ -229,6 +231,7 @@ def get_existing_github_issues():
 
         # We only care about issues marked as 'imported'; ones that we created
 
+        output("Identifying previously-migrated issues...\n")
         existing_issues = [ issue for issue in issues if "imported" in [ label.name for label in issue.get_labels() ] ]
         return dict(zip([ str(issue.title) for issue in existing_issues ], existing_issues))
         # return { str(issue.title): issue for issue in existing_issues }  Python 2.7+
