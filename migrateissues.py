@@ -4,8 +4,9 @@ import optparse
 import sys
 import re
 import logging
-import dateutil.parser
 import getpass
+
+from datetime import datetime
 
 from github import Github
 from github import GithubException
@@ -16,7 +17,7 @@ import gdata.gauth
 import gdata.client
 import gdata.data
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level = logging.ERROR)
 
 # The maximum number of records to retrieve from Google Code in a single request
 
@@ -49,6 +50,14 @@ def parse_gcode_id(id_text):
     return re.search("\d+$", id_text).group(0)
 
 
+def parse_gcode_date(date_text):
+
+    """ Transforms a Google Code date into  """
+
+    parsed = datetime.strptime(date_text, "%Y-%m-%dT%H:%M:%S.000Z")
+    return parsed.strftime("%B %d, %Y %H:%M:%S")
+
+
 def add_issue_to_github(issue):
 
     """ Migrates the given Google Code issue to Github. """
@@ -58,7 +67,7 @@ def add_issue_to_github(issue):
     link = issue.link[1].href
     author = issue.author[0].name.text
     content = issue.content.text
-    date = dateutil.parser.parse(issue.published.text).strftime('%B %d, %Y %H:%M:%S')
+    date = parse_gcode_date(issue.published.text)
 
     header = "_Original author: %s (%s)_" % (author, date)
     body = github_escape("%s\n\n%s\n\n\n_Original issue: %s_" % (header, content, link))
@@ -141,7 +150,7 @@ def add_comment_to_github(comment, github_issue):
 
     gid = parse_gcode_id(comment.id.text)
     author = comment.author[0].name.text
-    date = dateutil.parser.parse(comment.published.text).strftime("%B %d, %Y %H:%M:%S")
+    date = parse_gcode_date(comment.published.text)
     content = github_escape(comment.content.text)
 
     body = "_From %s on %s:_\n%s" % (author, date, content)
