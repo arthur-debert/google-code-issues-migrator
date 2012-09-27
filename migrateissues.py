@@ -174,7 +174,7 @@ def add_comment_to_github(comment, github_issue):
     date = parse_gcode_date(comment.published.text)
     content = comment.content.text
 
-    body = github_escape("_From %s on %s:_\n%s" % (author, date, content))
+    body = github_escape("_From %s on %s_\n%s" % (author, date, content))
 
     logging.info("Adding comment %s", gid)
 
