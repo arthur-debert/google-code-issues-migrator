@@ -23,6 +23,11 @@ logging.basicConfig(level = logging.ERROR)
 
 GOOGLE_MAX_RESULTS = 25
 
+# The minimum number of remaining Github rate-limited API requests before we pre-emptively
+# abort to avoid hitting the limit part-way through migrating an issue.
+
+GITHUB_SPARE_REQUESTS = 50
+
 # Mapping from Google Code issue labels to Github labels
 
 LABEL_MAPPING = {
@@ -88,6 +93,13 @@ def add_issue_to_github(issue):
     author = issue.author[0].name.text
     content = issue.content.text
     date = parse_gcode_date(issue.published.text)
+
+    # Github rate-limits API requests to 5000 per hour, and if we hit that limit part-way
+    # through adding an issue it could end up in an incomplete state.  To avoid this we'll
+    # ensure that there are enough requests remaining before we start migrating an issue.
+
+    if github.rate_limiting[0] < GITHUB_SPARE_REQUESTS:
+        raise Exception("Aborting to to impending Github API rate-limit cutoff.")
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
