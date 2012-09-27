@@ -86,9 +86,6 @@ def add_issue_to_github(issue):
             import_label = github_repo.create_label("imported", "FFFFFF")
         github_issue.add_to_labels(import_label)
 
-        #if issue.status.text.lower() in "invalid closed fixed wontfix verified done duplicate".lower():
-        #    github_issue.edit(state="closed")
-
     # Convert Google Code labels to Github tags where possible
 
     if issue.label:
