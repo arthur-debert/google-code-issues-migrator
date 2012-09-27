@@ -34,7 +34,8 @@ LABEL_MAPPING = {
 
 STATE_MAPPING = {
     'invalid': "invalid",
-    'duplicate': "duplicate"
+    'duplicate': "duplicate",
+    'wontfix': "wontfix"
 }
 
 
