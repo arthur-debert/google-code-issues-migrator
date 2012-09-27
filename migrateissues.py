@@ -300,7 +300,20 @@ if __name__ == "__main__":
     google = gdata.projecthosting.client.ProjectHostingClient()
     github = Github(github_user_name, github_password)
     github_user = github.get_user()
-    github_repo = github_user.get_repo(github_project)
+
+    # If the project name is specified as owner/project, assume that it's owned by either
+    # a different user than the one we have credentials for, or an organization.
+
+    if "/" in github_project:
+        owner_name, github_project = github_project.split("/")
+        try: github_owner = github.get_user(owner_name)
+        except GithubException:
+            try: github_owner = github.get_organization(owner_name)
+            except GithubException:
+                github_owner = github_user
+    else: github_owner = github_user
+
+    github_repo = github_owner.get_repo(github_project)
 
     try:
         existing_issues = get_existing_github_issues()
