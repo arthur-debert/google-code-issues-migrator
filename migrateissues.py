@@ -43,6 +43,15 @@ def github_escape(string):
     return string.replace("%", "&#37;")
 
 
+def github_label(name, color = "FFFFFF"):
+
+    """ Returns the Github label with the given name, creating it if necessary. """
+
+    try: return github_repo.get_label(name)
+    except GithubException:
+        return github_repo.create_label(name, color)
+
+
 def parse_gcode_id(id_text):
 
     """ Returns the numeric part of a Google Code ID string. """
@@ -86,7 +95,7 @@ def add_issue_to_github(issue):
         try: import_label = github_repo.get_label("imported")
         except GithubException:
             import_label = github_repo.create_label("imported", "FFFFFF")
-        github_issue.add_to_labels(import_label)
+        github_issue.add_to_labels(github_label("imported"))
 
     # Assigns issues that originally had an owner to the current user
 
@@ -100,10 +109,7 @@ def add_issue_to_github(issue):
         for label in issue.label:
             label_text = LABEL_MAPPING.get(label.text, label.text)
             if not options.dry_run:
-                try: github_label = github_repo.get_label(label_text)
-                except GithubException:
-                    github_label = github_repo.create_label(label_text, "FFFFFF")
-                github_issue.add_to_labels(github_label)
+                github_issue.add_to_labels(github_label(label_text))
             output(".")
 
     return github_issue
