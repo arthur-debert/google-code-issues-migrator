@@ -64,7 +64,7 @@ def parse_gcode_id(id_text):
 
     """ Returns the numeric part of a Google Code ID string. """
 
-    return re.search("\d+$", id_text).group(0)
+    return int(re.search("\d+$", id_text).group(0))
 
 
 def parse_gcode_date(date_text):
@@ -119,7 +119,7 @@ def add_issue_to_github(issue):
     header = "_Original author: %s (%s)_" % (author, date)
     body = "%s\n\n%s\n\n\n_Original issue: %s_" % (header, content, link)
 
-    output("Adding issue %s" % gid)
+    output("Adding issue %d" % gid)
 
     if not options.dry_run:
         github_labels = [ github_label(label) for label in labels ]
@@ -137,7 +137,7 @@ def add_issue_to_github(issue):
     return github_issue
 
 
-def add_comments_to_issue(github_issue, gcode_issue_id):
+def add_comments_to_issue(github_issue, gid):
 
     """ Migrates all comments from a Google Code issue to its Github copy. """
 
@@ -149,7 +149,7 @@ def add_comments_to_issue(github_issue, gcode_issue_id):
     while True:
 
         query = gdata.projecthosting.client.Query(start_index = start_index, max_results = max_results)
-        comments_feed = google.get_comments(google_project_name, gcode_issue_id, query = query)
+        comments_feed = google.get_comments(google_project_name, gid, query = query)
 
         # Filter out empty comments
 
@@ -185,7 +185,7 @@ def add_comment_to_github(comment, github_issue):
 
     body = "_From %s on %s_\n%s" % (author, date, content)
 
-    logging.info("Adding comment %s", gid)
+    logging.info("Adding comment %d", gid)
 
     if not options.dry_run:
         github_issue.create_comment(body.encode("utf-8"))
@@ -217,7 +217,8 @@ def process_gcode_issues(existing_issues):
 
             if options.synchronize_ids and previous_gid + 1 < gid:
                 while previous_gid + 1 < gid:
-                    title = "Google Code skipped issue %s" % (previous_gid + 1)
+                    output("Adding dummy issue %d" % previous_gid + 1)
+                    title = "Google Code skipped issue %d" % (previous_gid + 1)
                     if title not in existing_issues:
                         body = "_Skipping this issue number to maintain synchronization with Google Code issue IDs._"
                         github_issue = github_repo.create_issue(title, body = body, labels = [github_label("imported")])
@@ -228,7 +229,7 @@ def process_gcode_issues(existing_issues):
 
             if issue.title.text in existing_issues:
                 github_issue = existing_issues[issue.title.text]
-                output("Not adding issue %s (exists)" % gid)
+                output("Not adding issue %d (exists)" % gid)
             else: github_issue = add_issue_to_github(issue)
 
             if github_issue:
@@ -258,7 +259,7 @@ def get_existing_github_issues():
 
         # We only care about issues marked as 'imported'; ones that we created
 
-        output("Identifying previously-migrated issues...\n")
+        output("Retrieved %d issues; identifying ones already migrated...\n" % len(issues))
         existing_issues = [ issue for issue in issues if "imported" in [ label.name for label in issue.get_labels() ] ]
         return dict(zip([ str(issue.title) for issue in existing_issues ], existing_issues))
         # return { str(issue.title): issue for issue in existing_issues }  Python 2.7+
