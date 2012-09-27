@@ -208,6 +208,7 @@ def process_gcode_issues(existing_issues):
             break
 
         for issue in issues_feed.entry:
+
             gid = parse_gcode_id(issue.id.text)
 
             # If we're trying to do a complete migration to a fresh Github project, and
@@ -217,7 +218,7 @@ def process_gcode_issues(existing_issues):
 
             if options.synchronize_ids and previous_gid + 1 < gid:
                 while previous_gid + 1 < gid:
-                    output("Adding dummy issue %d" % previous_gid + 1)
+                    output("Adding dummy issue %d\n" % (previous_gid + 1))
                     title = "Google Code skipped issue %d" % (previous_gid + 1)
                     if title not in existing_issues:
                         body = "_Skipping this issue number to maintain synchronization with Google Code issue IDs._"
