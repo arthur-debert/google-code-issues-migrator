@@ -317,7 +317,7 @@ if __name__ == "__main__":
     parser = optparse.OptionParser(usage = usage, description = description)
 
     parser.add_option("-d", "--dry-run", action = "store_true", dest = "dry_run", help = "Don't modify anything on Github", default = False)
-    parser.add_option("-a", "--assign-owner", action = "store_true", dest = "assign_owner", help = "Assign owned tickets to the Github user", default = False)
+    parser.add_option("-a", "--assign-owner", action = "store_true", dest = "assign_owner", help = "Assign owned issues to the Github user", default = False)
     parser.add_option("-s", "--synchronize-ids", action = "store_true", dest = "synchronize_ids", help = "Ensure that migrated issues keep the same ID", default = False)
     parser.add_option("-p", "--omit-priority", action = "store_true", dest = "omit_priority", help = "Don't migrate priority labels", default = False)
 
