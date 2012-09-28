@@ -256,7 +256,7 @@ def process_gcode_issues(existing_issues):
 
             if options.synchronize_ids and previous_gid + 1 < gid:
                 while previous_gid + 1 < gid:
-                    output("Adding dummy issue %d\n" % (previous_gid + 1))
+                    output("Using dummy entry for missing issue %d\n" % (previous_gid + 1))
                     title = "Google Code skipped issue %d" % (previous_gid + 1)
                     if title not in existing_issues:
                         body = "_Skipping this issue number to maintain synchronization with Google Code issue IDs._"
