@@ -10,6 +10,7 @@ from datetime import datetime
 
 from github import Github
 from github import GithubException
+from atom.core import XmlElement
 
 import gdata.projecthosting.client
 import gdata.projecthosting.data
@@ -18,6 +19,12 @@ import gdata.client
 import gdata.data
 
 logging.basicConfig(level = logging.ERROR)
+
+# Patch gdata's CommentEntry Updates object to include the merged-into field
+
+class MergedIntoUpdate(XmlElement):
+    _qname = gdata.projecthosting.data.ISSUES_TEMPLATE % 'mergedIntoUpdate'
+gdata.projecthosting.data.Updates.mergedIntoUpdate = MergedIntoUpdate
 
 # The maximum number of records to retrieve from Google Code in a single request
 
@@ -73,6 +80,43 @@ def parse_gcode_date(date_text):
 
     parsed = datetime.strptime(date_text, "%Y-%m-%dT%H:%M:%S.000Z")
     return parsed.strftime("%B %d, %Y %H:%M:%S")
+
+
+def should_migrate_comment(comment):
+
+    """ Returns True if the given comment should be migrated to Github, otherwise False.
+
+    A comment should be migrated if it represents a duplicate-merged-into update, or if
+    it has a body that isn't the automated 'issue x has been merged into this issue'.
+
+    """
+
+    if comment.content.text:
+        if re.match(r"Issue (\d+) has been merged into this issue.", comment.content.text):
+            return False
+        return True
+    elif comment.updates.mergedIntoUpdate:
+        return True
+    return False
+
+
+def format_comment(comment):
+
+    """ Returns the Github comment body for the given Google Code comment.
+
+    Most comments are left unchanged, except to add a header identifying their original
+    author and post-date.  Google Code's merged-into comments, used to flag duplicate
+    issues, are replaced with a little message linking to the parent issue.
+
+    """
+
+    author = comment.author[0].name.text
+    date = parse_gcode_date(comment.published.text)
+    content = comment.content.text
+
+    if comment.updates.mergedIntoUpdate:
+        return "_This issue is a duplicate of #%s_" % comment.updates.mergedIntoUpdate.text
+    else: return "_From %s on %s_\n%s" % (author, date, content)
 
 
 def add_issue_to_github(issue):
@@ -144,6 +188,10 @@ def add_comments_to_issue(github_issue, gid):
     start_index = 1
     max_results = GOOGLE_MAX_RESULTS
 
+    # Retrieve existing Github comments, to figure out which Google Code comments are new
+
+    existing_comments = [ comment.body for comment in github_issue.get_comments() ]
+
     # Retrieve comments in blocks of GOOGLE_MAX_RESULTS until there are none left
 
     while True:
@@ -151,16 +199,11 @@ def add_comments_to_issue(github_issue, gid):
         query = gdata.projecthosting.client.Query(start_index = start_index, max_results = max_results)
         comments_feed = google.get_comments(google_project_name, gid, query = query)
 
-        # Filter out empty comments
+        # Filter out empty and otherwise unnecessary comments, unless they contain the
+        # 'migrated into' update for a duplicate issue; we'll generate a special Github
+        # comment for those.
 
-        comments = [ comment for comment in comments_feed.entry if comment.content.text is not None ]
-
-        # Filter out any comments that already exist in Github and are tagged as imported
-
-        existing_comments = github_issue.get_comments()
-        existing_comments = [ comment for comment in existing_comments if comment.body[0:5] == "_From" ]
-        existing_comments = [ re.sub(r"^_From.+_\n", "", comment.body) for comment in existing_comments ]
-        comments = [ comment for comment in comments if comment.content.text not in existing_comments ]
+        comments = [ comment for comment in comments_feed.entry if should_migrate_comment(comment) and format_comment(comment) not in existing_comments ]
 
         # Add any remaining comments to the Github issue
 
@@ -171,6 +214,7 @@ def add_comments_to_issue(github_issue, gid):
         for comment in comments:
             add_comment_to_github(comment, github_issue)
             output(".")
+
         start_index += max_results
 
 
@@ -179,11 +223,7 @@ def add_comment_to_github(comment, github_issue):
     """ Adds a single Google Code comment to the given Github issue. """
 
     gid = parse_gcode_id(comment.id.text)
-    author = comment.author[0].name.text
-    date = parse_gcode_date(comment.published.text)
-    content = comment.content.text
-
-    body = "_From %s on %s_\n%s" % (author, date, content)
+    body = format_comment(comment)
 
     logging.info("Adding comment %d", gid)
 
