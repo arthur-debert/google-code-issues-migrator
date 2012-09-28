@@ -168,8 +168,6 @@ def add_issue_to_github(issue):
     if not options.dry_run:
         github_labels = [ github_label(label) for label in labels ]
         github_issue = github_repo.create_issue(title, body = body.encode("utf-8"), labels = github_labels)
-        if issue.state.text != "open":
-            github_issue.edit(state = issue.state.text)
 
     # Assigns issues that originally had an owner to the current user
 
@@ -275,6 +273,8 @@ def process_gcode_issues(existing_issues):
 
             if github_issue:
                 add_comments_to_issue(github_issue, gid)
+                if github_issue.state != issue.state.text:
+                    github_issue.edit(state = issue.state.text)
             output("\n")
 
             previous_gid = gid
