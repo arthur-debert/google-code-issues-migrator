@@ -264,7 +264,7 @@ def process_gcode_issues(existing_issues):
                         body = "_Skipping this issue number to maintain synchronization with Google Code issue IDs._"
                         github_issue = github_repo.create_issue(title, body = body, labels = [github_label("imported")])
                         github_issue.edit(state = "closed")
-                        previous_gid += 1
+                    previous_gid += 1
 
             # Add the issue and its comments to Github, if we haven't already
 
