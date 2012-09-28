@@ -3,7 +3,7 @@ This is a simple script to migrate issues from Google Code to Github.
 For a full history of changes, including the many additions found in this fork, please
 consult the [change log](https://github.com/dnschnur/google-code-issues-migrator/blob/master/CHANGES.md).
 
-## How it works ##
+### How it works ###
 
 The script iterates over the issues and comments in a Google Code repository, creating
 matching issues and comments in Github.  This has some limitations:
@@ -20,7 +20,7 @@ issue status (invalid, wontfix, duplicate) and merged-into links for duplicate i
 The script can be run repeatedly to migrate new issues and comments, without mucking up
 what's already on Github.
 
-## Required Python libraries ##
+### Required Python libraries ###
 
 * [gdata](http://code.google.com/p/gdata-python-client/) -- `pip install gdata`
 * [PyGithub](https://github.com/jacquev6/PyGithub/) -- `pip install PyGithub`
@@ -34,7 +34,7 @@ Google Code issues with their migrated copies.
 We removed the script's escaping once PyGithub introduced a work-around for the problem,
 which was first included in their 1.8.0 release.
 
-## Usage ##
+### Usage ###
 
 	migrateissues.py [options] <google project name> <github username> <github project>
 

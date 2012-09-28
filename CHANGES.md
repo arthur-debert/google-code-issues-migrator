@@ -1,10 +1,10 @@
 This is a change-history and list of contributors to the script.
 
-### Even newer version by David Schnur ###
+## Even newer version by David Schnur ##
 
 https://github.com/dnschnur/google-code-issues-migrator
 
-#### New Features ####
+### New Features ###
 
  - Greatly optimized Github API usage, allowing the script to process several times as
    many issues before reaching the API's hourly rate-limit.
@@ -34,17 +34,17 @@ https://github.com/dnschnur/google-code-issues-migrator
 
  - Added an option to omit migration of Google Code Priority labels.
 
-#### Bug Fixes ####
+### Bug Fixes ###
 
  - Comments containing percent-signs are no longer added repeatedly when the script is run
    multiple times.
 
-### Newer version by Jake Biesinger ###
+## Newer version by Jake Biesinger ##
 
 https://github.com/jakebiesinger/google-code-issues-migrator
 
  - Switched to PyGithub in order to support the Github v3 API.
 
-### Original version by Arthur Debert (and many other contributors) ###
+## Original version by Arthur Debert (and many other contributors) ##
 
 https://github.com/arthur-debert/google-code-issues-migrator
