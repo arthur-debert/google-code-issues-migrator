@@ -115,7 +115,7 @@ def format_comment(comment):
     content = comment.content.text
 
     if comment.updates.mergedIntoUpdate:
-        return "_This issue is a duplicate of #%s_" % comment.updates.mergedIntoUpdate.text
+        return "_This issue is a duplicate of #%d_" % (options.base_id + int(comment.updates.mergedIntoUpdate.text))
     else: return "_From %s on %s_\n%s" % (author, date, content)
 
 
@@ -316,10 +316,11 @@ if __name__ == "__main__":
     description = "Migrate all issues from a Google Code project to a Github project."
     parser = optparse.OptionParser(usage = usage, description = description)
 
-    parser.add_option("-d", "--dry-run", action = "store_true", dest = "dry_run", help = "Don't modify anything on Github", default = False)
     parser.add_option("-a", "--assign-owner", action = "store_true", dest = "assign_owner", help = "Assign owned issues to the Github user", default = False)
-    parser.add_option("-s", "--synchronize-ids", action = "store_true", dest = "synchronize_ids", help = "Ensure that migrated issues keep the same ID", default = False)
+    parser.add_option("-b", "--base-id", type = "int", action = "store", dest = "base_id", help = "Number of issues in Github before migration", default = 0)
+    parser.add_option("-d", "--dry-run", action = "store_true", dest = "dry_run", help = "Don't modify anything on Github", default = False)
     parser.add_option("-p", "--omit-priority", action = "store_true", dest = "omit_priority", help = "Don't migrate priority labels", default = False)
+    parser.add_option("-s", "--synchronize-ids", action = "store_true", dest = "synchronize_ids", help = "Ensure that migrated issues keep the same ID", default = False)
 
     options, args = parser.parse_args()
 
