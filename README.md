@@ -1,7 +1,7 @@
 This is a simple script to migrate issues from Google Code to Github.
 
 For a full history of changes, including the many additions found in this fork, please
-consult the [change log](CHANGES.md).
+consult the [change log](https://github.com/dnschnur/google-code-issues-migrator/blob/master/CHANGES.md).
 
 ## How it works ##
 
