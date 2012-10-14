@@ -1,6 +1,12 @@
 This is a change-history and list of contributors to the script.
 
-## Even newer version by David Schnur ##
+## 2012.10.14 by [Joel Thornton](http://github.com/joelpt) ##
+
+  - Improved compatibility with respect to comments migrated by a previous version of
+    this script.
+
+
+## 2012.09.28 by [David Schnur](http://github.com/dnschur) ##
 
 https://github.com/dnschnur/google-code-issues-migrator
 
@@ -39,12 +45,14 @@ https://github.com/dnschnur/google-code-issues-migrator
  - Comments containing percent-signs are no longer added repeatedly when the script is run
    multiple times.
 
-## Newer version by Jake Biesinger ##
+
+## 2012.09.24 by [Jake Biesinger](http://github.com/jakebiesinger) ##
 
 https://github.com/jakebiesinger/google-code-issues-migrator
 
  - Switched to PyGithub in order to support the Github v3 API.
 
-## Original version by Arthur Debert (and many other contributors) ##
 
-https://github.com/arthur-debert/google-code-issues-migrator
+## Original version by [Arthur Debert](http://github.com/arthur-debert) (and many other contributors) ##
+
+http://github.com/arthur-debert/google-code-issues-migrator
