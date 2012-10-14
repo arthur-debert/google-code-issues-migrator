@@ -76,7 +76,7 @@ def parse_gcode_id(id_text):
 
 def parse_gcode_date(date_text):
 
-    """ Transforms a Google Code date into  """
+    """ Transforms a Google Code date into a more human readable string. """
 
     parsed = datetime.strptime(date_text, "%Y-%m-%dT%H:%M:%S.000Z")
     return parsed.strftime("%B %d, %Y %H:%M:%S")
@@ -189,6 +189,10 @@ def add_comments_to_issue(github_issue, gid):
     # Retrieve existing Github comments, to figure out which Google Code comments are new
 
     existing_comments = [ comment.body for comment in github_issue.get_comments() ]
+
+    # Retain compatibility with earlier versions of migrateissues.py
+
+    existing_comments = [ re.sub(r'^(.+):_\n', r'\1_\n', body) for body in existing_comments ]
 
     # Retrieve comments in blocks of GOOGLE_MAX_RESULTS until there are none left
 
