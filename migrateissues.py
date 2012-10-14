@@ -18,7 +18,7 @@ import gdata.data
 #GITHUB_REQUESTS_PER_SECOND = 0.5
 GOOGLE_MAX_RESULTS = 25
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 
 
 def output(string):
@@ -141,10 +141,17 @@ def process_gcode_issues(existing_issues):
 def get_existing_github_issues():
     try:
         existing_issues = list(github_repo.get_issues(state='open')) + list(github_repo.get_issues(state='closed'))
+        existing_count = len(existing_issues)
         existing_issues = filter(lambda i: 'imported' in [l.name for l in i.get_labels()], existing_issues)
+        imported_count = len(existing_issues)
         existing_issues = dict(zip([str(i.title) for i in existing_issues], existing_issues))
+        unique_count = len(existing_issues)
+        logging.info('Found %d Github issues, %d imported, %d unique titles',existing_count,imported_count,unique_count)
+        if unique_count < imported_count:
+            logging.warn('WARNING: %d duplicate issue titles',imported_count-unique_count)
     except:
-        existing_issues = {}
+        logging.error( 'Failed to enumerate existing issues')
+        raise
     return existing_issues
 
 
@@ -168,6 +175,8 @@ if __name__ == "__main__":
 
     try:
         existing_issues = get_existing_github_issues()
+        # Note: this requires extended version of PyGithub from tfmorris/PyGithub repo
+        logging.info( 'Rate limit (remaining/toal) %s',repr(github.rate_limit(refresh=True)))
         process_gcode_issues(existing_issues)
     except:
         parser.print_help()
