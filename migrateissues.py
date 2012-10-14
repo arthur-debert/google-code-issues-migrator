@@ -17,6 +17,9 @@ import gdata.data
 
 #GITHUB_REQUESTS_PER_SECOND = 0.5
 GOOGLE_MAX_RESULTS = 25
+GOOGLE_ISSUE_TEMPLATE = '_Original issue: %s_'
+GOOGLE_URL = 'http://code.google.com/p/%s/issues/detail\?id=(\d+)'
+GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE % GOOGLE_URL
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,7 +41,9 @@ def add_issue_to_github(issue):
     content = issue.content.text
     date = dateutil.parser.parse(issue.published.text).strftime('%B %d, %Y %H:%M:%S')
     header = '_Original author: %s (%s)_' % (author, date)
-    body = '%s\n\n%s\n\n\n_Original issue: %s_' % (header, content, link)
+    # Note: the original issue template needs to match the regex
+    footer = GOOGLE_ISSUE_TEMPLATE % link
+    body = '%s\n\n%s\n\n\n%s' % (header, content, footer)
 
     # Github takes issue with % in the title or body.  
     title = title.replace('%', '&#37;')
@@ -129,30 +134,37 @@ def process_gcode_issues(existing_issues):
             break
         for issue in issues_feed.entry:
             id = parse_gcode_id(issue.id.text)
-            if issue.title.text in existing_issues.keys():
-                github_issue = existing_issues[issue.title.text]
+            if id in existing_issues.keys():
+                github_issue = existing_issues[id]
                 output('Not adding issue %s (exists)' % (id))
             else:
                 github_issue = add_issue_to_github(issue)
             add_comments_to_issue(github_issue, id)
         start_index += max_results
+        logging.info( 'Rate limit (remaining/toal) %s',repr(github.rate_limit(refresh=True)))
 
 
 def get_existing_github_issues():
+    id_re = re.compile(GOOGLE_ID_RE % google_project_name)
     try:
         existing_issues = list(github_repo.get_issues(state='open')) + list(github_repo.get_issues(state='closed'))
         existing_count = len(existing_issues)
-        existing_issues = filter(lambda i: 'imported' in [l.name for l in i.get_labels()], existing_issues)
-        imported_count = len(existing_issues)
-        existing_issues = dict(zip([str(i.title) for i in existing_issues], existing_issues))
-        unique_count = len(existing_issues)
-        logging.info('Found %d Github issues, %d imported, %d unique titles',existing_count,imported_count,unique_count)
-        if unique_count < imported_count:
-            logging.warn('WARNING: %d duplicate issue titles',imported_count-unique_count)
+        issue_map = {}
+        for issue in existing_issues:
+            id_match = id_re.search(issue.body)
+            if id_match:
+                google_id = id_match.group(1)
+                issue_map[google_id] = issue
+                labels = [l.name for l in issue.get_labels()]
+                if not 'imported' in labels:
+                    # TODO we could fix up the label here instead of just warning
+                    logging.warn('Issue missing imported label %s- %s - %s',google_id,repr(labels),issue.title)
+        imported_count = len(issue_map)
+        logging.info('Found %d Github issues, %d imported',existing_count,imported_count)
     except:
         logging.error( 'Failed to enumerate existing issues')
         raise
-    return existing_issues
+    return issue_map
 
 
 if __name__ == "__main__":
@@ -179,5 +191,5 @@ if __name__ == "__main__":
         logging.info( 'Rate limit (remaining/toal) %s',repr(github.rate_limit(refresh=True)))
         process_gcode_issues(existing_issues)
     except:
-        parser.print_help()
+        parser.printhelp()
         raise
