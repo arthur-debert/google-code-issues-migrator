@@ -191,5 +191,5 @@ if __name__ == "__main__":
         logging.info( 'Rate limit (remaining/toal) %s',repr(github.rate_limit(refresh=True)))
         process_gcode_issues(existing_issues)
     except:
-        parser.printhelp()
+        parser.print_help()
         raise
