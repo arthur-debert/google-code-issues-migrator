@@ -141,7 +141,7 @@ def process_gcode_issues(existing_issues):
                 github_issue = add_issue_to_github(issue)
             add_comments_to_issue(github_issue, id)
         start_index += max_results
-        logging.info( 'Rate limit (remaining/toal) %s',repr(github.rate_limit(refresh=True)))
+        log_rate_info()
 
 
 def get_existing_github_issues():
@@ -166,7 +166,10 @@ def get_existing_github_issues():
         raise
     return issue_map
 
-
+def log_rate_info():
+        # Note: this requires extended version of PyGithub from tfmorris/PyGithub repo
+        logging.info( 'Rate limit (remaining/total) %s',repr(github.rate_limit(refresh=True)))
+    
 if __name__ == "__main__":
     usage = "usage: %prog [options] <google_project_name> <github_user_name> <github_project>"
     description = "Migrate all issues from a Google Code project to a Github project."
@@ -183,12 +186,12 @@ if __name__ == "__main__":
 
     google = gdata.projecthosting.client.ProjectHostingClient()
     github = Github(github_user_name, github_password)
+    log_rate_info()
     github_repo = github.get_user().get_repo(github_project)
 
     try:
         existing_issues = get_existing_github_issues()
-        # Note: this requires extended version of PyGithub from tfmorris/PyGithub repo
-        logging.info( 'Rate limit (remaining/toal) %s',repr(github.rate_limit(refresh=True)))
+        log_rate_info()
         process_gcode_issues(existing_issues)
     except:
         parser.print_help()
