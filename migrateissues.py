@@ -20,6 +20,8 @@ GOOGLE_MAX_RESULTS = 25
 GOOGLE_ISSUE_TEMPLATE = '_Original issue: %s_'
 GOOGLE_URL = 'http://code.google.com/p/%s/issues/detail\?id=(\d+)'
 GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE % GOOGLE_URL
+NUM_RE = re.compile('\s#(\d+)')
+ISSUE_RE = re.compile('[I|i]ssue\s(\d+)')
 
 logging.basicConfig(level=logging.INFO)
 
@@ -33,6 +35,13 @@ def parse_gcode_id(id_text):
     return re.search('\d+$', id_text).group(0)
 
 
+def escape(s):
+    s = re.sub(NUM_RE," #  \g<1>", s) # escape things which look like Github issue refs
+    s = s.replace('%', '&#37;')  # Github chokes on % in the payload
+    s = re.sub(ISSUE_RE,'issue #\g<1>', s) # convert Google Code issue refs
+    return s
+
+
 def add_issue_to_github(issue):
     id = parse_gcode_id(issue.id.text)
     title = issue.title.text
@@ -41,13 +50,12 @@ def add_issue_to_github(issue):
     content = issue.content.text
     date = dateutil.parser.parse(issue.published.text).strftime('%B %d, %Y %H:%M:%S')
     header = '_Original author: %s (%s)_' % (author, date)
-    # Note: the original issue template needs to match the regex
     footer = GOOGLE_ISSUE_TEMPLATE % link
     body = '%s\n\n%s\n\n\n%s' % (header, content, footer)
 
     # Github takes issue with % in the title or body.  
     title = title.replace('%', '&#37;')
-    body = body.replace('%', '&#37;')
+    body = escape(body)
 
     output('Adding issue %s' % (id))
 
@@ -116,7 +124,7 @@ def add_comment_to_github(comment, github_issue):
     author = comment.author[0].name.text
     date = dateutil.parser.parse(comment.published.text).strftime('%B %d, %Y %H:%M:%S')
     content = comment.content.text
-    content = content.replace('%', '&#37;')  # Github chokes on % in the payload
+    content = escape(content)
     body = '_From %s on %s:_\n%s' % (author, date, content)
 
     logging.info('Adding comment %s', id)
