@@ -34,11 +34,16 @@ def output(string):
 def parse_gcode_id(id_text):
     return re.search('\d+$', id_text).group(0)
 
+def  mapissue(match):
+    old = match.group(1)
+    # TODO: map old issue to new issue
+    # can't assume 1:1 mapping due to missing issues on GC & added issues on Github
+    return 'issue #' +old
 
 def escape(s):
     s = re.sub(NUM_RE," #  \g<1>", s) # escape things which look like Github issue refs
     s = s.replace('%', '&#37;')  # Github chokes on % in the payload
-    s = re.sub(ISSUE_RE,'issue #\g<1>', s) # convert Google Code issue refs
+    s = re.sub(ISSUE_RE,mapissue, s) # convert Google Code issue refs
     return s
 
 
