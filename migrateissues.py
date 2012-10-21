@@ -29,9 +29,11 @@ gdata.projecthosting.data.Updates.mergedIntoUpdate = MergedIntoUpdate
 # The maximum number of records to retrieve from Google Code in a single request
 
 GOOGLE_MAX_RESULTS = 25
+
 GOOGLE_ISSUE_TEMPLATE = '_Original issue: %s_'
-GOOGLE_URL = 'http://code.google.com/p/%s/issues/detail\?id=(\d+)'
-GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE % GOOGLE_URL
+GOOGLE_URL = 'http://code.google.com/p/%s/issues/detail?id=%d'
+GOOGLE_URL_RE = 'http://code.google.com/p/%s/issues/detail\?id=(\d+)'
+GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE % GOOGLE_URL_RE
 NUM_RE = re.compile('\s#(\d+)')
 ISSUE_RE = re.compile('[I|i]ssue\s(\d+)')
 
@@ -280,23 +282,28 @@ def process_gcode_issues(existing_issues):
 
             # If we're trying to do a complete migration to a fresh Github project, and
             # want to keep the issue numbers synced with Google Code's, then we need to
-            # watch out for the fact that Google Code sometimes skips issue IDs.  We'll
-            # work around this by adding dummy issues until the numbers match again.
+            # watch out for the fact that deleted issues on Google Code leave holes in the ID numbering.
+            # We'll work around this by adding dummy issues until the numbers match again.
 
-            if options.synchronize_ids and previous_gid + 1 < gid:
+            if options.synchronize_ids:
                 while previous_gid + 1 < gid:
-                    output("Using dummy entry for missing issue %d\n" % (previous_gid + 1))
-                    title = "Google Code skipped issue %d" % (previous_gid + 1)
-                    if title not in existing_issues:
+                    previous_gid += 1
+                    output("Using dummy entry for missing issue %d\n" % (previous_gid ))
+                    title = "Google Code skipped issue %d" % (previous_gid )
+                    if previous_gid not in existing_issues:
                         body = "_Skipping this issue number to maintain synchronization with Google Code issue IDs._"
+                        link = GOOGLE_URL % (google_project_name, previous_gid)
+                        footer = GOOGLE_ISSUE_TEMPLATE % link
+                        body += '\n\n' + footer
                         github_issue = github_repo.create_issue(title, body = body, labels = [github_label("imported")])
                         github_issue.edit(state = "closed")
-                    previous_gid += 1
+                        existing_issues[previous_gid]=github_issue
+                    
 
             # Add the issue and its comments to Github, if we haven't already
 
-            if gid in existing_issues.keys():
-                github_issue = existing_issues[issue.title.text]
+            if gid in existing_issues:
+                github_issue = existing_issues[gid]
                 output("Not adding issue %d (exists)" % gid)
             else: github_issue = add_issue_to_github(issue)
 
@@ -315,7 +322,7 @@ def process_gcode_issues(existing_issues):
 def get_existing_github_issues():
     """ Returns a dictionary of Github issues previously migrated from Google Code.
 
-    The result maps issue titles to their Github issue objects.
+    The result maps Google Code issue numbers to Github issue objects.
     """
 
     output("Retrieving existing Github issues...\n")
@@ -328,7 +335,7 @@ def get_existing_github_issues():
         for issue in existing_issues:
             id_match = id_re.search(issue.body)
             if id_match:
-                google_id = id_match.group(1)
+                google_id = int(id_match.group(1))
                 issue_map[google_id] = issue
                 labels = [l.name for l in issue.get_labels()]
                 if not 'imported' in labels:
@@ -343,8 +350,9 @@ def get_existing_github_issues():
 
 
 def log_rate_info():
-        # Note: this requires extended version of PyGithub from tfmorris/PyGithub repo
-        logging.info( 'Rate limit (remaining/total) %s',repr(github.rate_limit(refresh=True)))
+    logging.info( 'Rate limit (remaining/total) %s',repr(github.rate_limiting))
+    # Note: this requires extended version of PyGithub from tfmorris/PyGithub repo
+    #logging.info( 'Rate limit (remaining/total) %s',repr(github.rate_limit(refresh=True)))
     
 if __name__ == "__main__":
 
