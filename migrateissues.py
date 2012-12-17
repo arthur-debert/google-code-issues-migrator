@@ -335,7 +335,15 @@ if __name__ == "__main__":
     label_cache = {}    # Cache Github tags, to avoid unnecessary API requests
 
     google_project_name, github_user_name, github_project = args
-    github_password = getpass.getpass("Github password: ")
+    
+    password_is_wrong = True
+    while password_is_wrong:
+        github_password = getpass.getpass("Github password: ")
+        try:
+            Github(github_user_name, github_password).get_user().login
+            password_is_wrong = False
+        except GithubException, exception:
+            print "Bad credentials, try again."
 
     google = gdata.projecthosting.client.ProjectHostingClient()
     github = Github(github_user_name, github_password)
