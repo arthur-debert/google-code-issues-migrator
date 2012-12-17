@@ -124,7 +124,7 @@ def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
     gid = parse_gcode_id(issue.id.text)
-    status = issue.status.text.lower()
+    status = issue.status.text.lower() if issue.status else ""
     title = issue.title.text
     link = issue.link[1].href
     author = issue.author[0].name.text
