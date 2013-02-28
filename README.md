@@ -39,6 +39,7 @@ what's already on Github.
 	  -d, --dry-run             Don't modify anything on Github
 	  -p, --omit-priority       Don't migrate priority labels
 	  -s, --synchronize-ids     Ensure that migrated issues keep the same ID
+	  --skip-closed             Skip all closed bugs
 
         You will be prompted for your github password.
 
@@ -58,3 +59,5 @@ original Google Code issue.  Normally this happens anyway, but in some cases Goo
 skips issue numbers; this option fills the gaps with dummy issues to ensure that the next
 real issue keeps the same numbering.  This only works, of course, if the migration starts
 with a fresh Github repistory.
+
+`--skip-closed` will skip migrating issues that were closed.

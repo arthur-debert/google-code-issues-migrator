@@ -281,6 +281,9 @@ def process_gcode_issues(existing_issues):
 
             gid = parse_gcode_id(issue.id.text)
 
+            if options.skip_closed and (issue.state.text == 'closed'):
+                continue
+
             # If we're trying to do a complete migration to a fresh Github project, and
             # want to keep the issue numbers synced with Google Code's, then we need to
             # watch out for the fact that deleted issues on Google Code leave holes in the ID numbering.
@@ -366,6 +369,7 @@ if __name__ == "__main__":
     parser.add_option("-d", "--dry-run", action = "store_true", dest = "dry_run", help = "Don't modify anything on Github", default = False)
     parser.add_option("-p", "--omit-priority", action = "store_true", dest = "omit_priority", help = "Don't migrate priority labels", default = False)
     parser.add_option("-s", "--synchronize-ids", action = "store_true", dest = "synchronize_ids", help = "Ensure that migrated issues keep the same ID", default = False)
+    parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
 
     options, args = parser.parse_args()
 
