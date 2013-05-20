@@ -30,6 +30,13 @@ gdata.projecthosting.data.Updates.mergedIntoUpdate = MergedIntoUpdate
 
 GOOGLE_MAX_RESULTS = 25
 
+GOOGLE_ISSUE_TEMPLATE = '_Original issue: %s_'
+GOOGLE_URL = 'http://code.google.com/p/%s/issues/detail?id=%d'
+GOOGLE_URL_RE = 'http://code.google.com/p/%s/issues/detail\?id=(\d+)'
+GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE % GOOGLE_URL_RE
+NUM_RE = re.compile('\s#(\d+)')
+ISSUE_RE = re.compile('[I|i]ssue\s(\d+)')
+
 # The minimum number of remaining Github rate-limited API requests before we pre-emptively
 # abort to avoid hitting the limit part-way through migrating an issue.
 
@@ -55,6 +62,20 @@ def output(string):
     sys.stdout.write(string)
     sys.stdout.flush()
 
+
+def  mapissue(match):
+    """Map a Google Code issue reference to the correct Github issue number """
+    old = match.group(1)
+    # TODO: map old issue to new issue
+    # can't assume 1:1 mapping due to missing issues on GC & added issues on Github
+    return 'issue #' +old
+
+def escape(s):
+    """Process text to convert markup and escape things which need escaping"""
+    s = re.sub(NUM_RE," #  \g<1>", s) # escape things which look like Github issue refs
+    s = s.replace('%', '&#37;')  # Escape % signs
+    s = re.sub(ISSUE_RE,mapissue, s) # convert Google Code issue refs to Github markup
+    return s
 
 def github_label(name, color = "FFFFFF"):
 
@@ -112,11 +133,12 @@ def format_comment(comment):
 
     author = comment.author[0].name.text
     date = parse_gcode_date(comment.published.text)
-    content = comment.content.text
+    content = escape(comment.content.text)
 
     if comment.updates.mergedIntoUpdate:
         return "_This issue is a duplicate of #%d_" % (options.base_id + int(comment.updates.mergedIntoUpdate.text))
     else: return "_From %s on %s_\n%s" % (author, date, content)
+
 
 
 def add_issue_to_github(issue):
@@ -130,6 +152,9 @@ def add_issue_to_github(issue):
     author = issue.author[0].name.text
     content = issue.content.text
     date = parse_gcode_date(issue.published.text)
+
+    # Github takes issue with % in the title or body.  
+    title = title.replace('%', '&#37;')
 
     # Github rate-limits API requests to 5000 per hour, and if we hit that limit part-way
     # through adding an issue it could end up in an incomplete state.  To avoid this we'll
@@ -161,7 +186,9 @@ def add_issue_to_github(issue):
     github_issue = None
 
     header = "_Original author: %s (%s)_" % (author, date)
-    body = "%s\n\n%s\n\n\n_Original issue: %s_" % (header, content, link)
+    footer = GOOGLE_ISSUE_TEMPLATE % link
+    body = "%s\n\n%s\n\n\n%s" % (header, content, footer)
+    body = escape(body)
 
     output("Adding issue %d" % gid)
 
@@ -255,23 +282,28 @@ def process_gcode_issues(existing_issues):
 
             # If we're trying to do a complete migration to a fresh Github project, and
             # want to keep the issue numbers synced with Google Code's, then we need to
-            # watch out for the fact that Google Code sometimes skips issue IDs.  We'll
-            # work around this by adding dummy issues until the numbers match again.
+            # watch out for the fact that deleted issues on Google Code leave holes in the ID numbering.
+            # We'll work around this by adding dummy issues until the numbers match again.
 
-            if options.synchronize_ids and previous_gid + 1 < gid:
+            if options.synchronize_ids:
                 while previous_gid + 1 < gid:
-                    output("Using dummy entry for missing issue %d\n" % (previous_gid + 1))
-                    title = "Google Code skipped issue %d" % (previous_gid + 1)
-                    if title not in existing_issues:
+                    previous_gid += 1
+                    output("Using dummy entry for missing issue %d\n" % (previous_gid ))
+                    title = "Google Code skipped issue %d" % (previous_gid )
+                    if previous_gid not in existing_issues:
                         body = "_Skipping this issue number to maintain synchronization with Google Code issue IDs._"
+                        link = GOOGLE_URL % (google_project_name, previous_gid)
+                        footer = GOOGLE_ISSUE_TEMPLATE % link
+                        body += '\n\n' + footer
                         github_issue = github_repo.create_issue(title, body = body, labels = [github_label("imported")])
                         github_issue.edit(state = "closed")
-                    previous_gid += 1
+                        existing_issues[previous_gid]=github_issue
+                    
 
             # Add the issue and its comments to Github, if we haven't already
 
-            if issue.title.text in existing_issues:
-                github_issue = existing_issues[issue.title.text]
+            if gid in existing_issues:
+                github_issue = existing_issues[gid]
                 output("Not adding issue %d (exists)" % gid)
             else: github_issue = add_issue_to_github(issue)
 
@@ -284,36 +316,44 @@ def process_gcode_issues(existing_issues):
             previous_gid = gid
 
         start_index += max_results
+        log_rate_info()
 
 
 def get_existing_github_issues():
-
     """ Returns a dictionary of Github issues previously migrated from Google Code.
 
-    The result maps issue titles to their Github issue objects.
-
+    The result maps Google Code issue numbers to Github issue objects.
     """
 
     output("Retrieving existing Github issues...\n")
+    id_re = re.compile(GOOGLE_ID_RE % google_project_name)
 
     try:
+        existing_issues = list(github_repo.get_issues(state='open')) + list(github_repo.get_issues(state='closed'))
+        existing_count = len(existing_issues)
+        issue_map = {}
+        for issue in existing_issues:
+            id_match = id_re.search(issue.body)
+            if id_match:
+                google_id = int(id_match.group(1))
+                issue_map[google_id] = issue
+                labels = [l.name for l in issue.get_labels()]
+                if not 'imported' in labels:
+                    # TODO we could fix up the label here instead of just warning
+                    logging.warn('Issue missing imported label %s- %s - %s',google_id,repr(labels),issue.title)
+        imported_count = len(issue_map)
+        logging.info('Found %d Github issues, %d imported',existing_count,imported_count)
+    except:
+        logging.error( 'Failed to enumerate existing issues')
+        raise
+    return issue_map
 
-        open_issues = list(github_repo.get_issues(state = "open"))
-        closed_issues = list(github_repo.get_issues(state = "closed"))
-        issues = open_issues + closed_issues
 
-        # We only care about issues marked as 'imported'; ones that we created
-
-        output("Retrieved %d issues; identifying ones already migrated...\n" % len(issues))
-        existing_issues = [ issue for issue in issues if "imported" in [ label.name for label in issue.get_labels() ] ]
-        return dict(zip([ str(issue.title) for issue in existing_issues ], existing_issues))
-        # return { str(issue.title): issue for issue in existing_issues }  Python 2.7+
-
-    except Exception:
-        return {}
-
-
-
+def log_rate_info():
+    logging.info( 'Rate limit (remaining/total) %s',repr(github.rate_limiting))
+    # Note: this requires extended version of PyGithub from tfmorris/PyGithub repo
+    #logging.info( 'Rate limit (remaining/total) %s',repr(github.rate_limit(refresh=True)))
+    
 if __name__ == "__main__":
 
     usage = "usage: %prog [options] <google project name> <github username> <github project>"
@@ -347,6 +387,7 @@ if __name__ == "__main__":
 
     google = gdata.projecthosting.client.ProjectHostingClient()
     github = Github(github_user_name, github_password)
+    log_rate_info()
     github_user = github.get_user()
 
     # If the project name is specified as owner/project, assume that it's owned by either
@@ -365,6 +406,7 @@ if __name__ == "__main__":
 
     try:
         existing_issues = get_existing_github_issues()
+        log_rate_info()
         process_gcode_issues(existing_issues)
     except Exception:
         parser.print_help()
