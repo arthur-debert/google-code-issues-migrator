@@ -72,9 +72,10 @@ def  mapissue(match):
 
 def escape(s):
     """Process text to convert markup and escape things which need escaping"""
-    s = re.sub(NUM_RE," #  \g<1>", s) # escape things which look like Github issue refs
-    s = s.replace('%', '&#37;')  # Escape % signs
-    s = re.sub(ISSUE_RE,mapissue, s) # convert Google Code issue refs to Github markup
+    if s is not None:
+        s = re.sub(NUM_RE," #  \g<1>", s) # escape things which look like Github issue refs
+        s = s.replace('%', '&#37;')  # Escape % signs
+        s = re.sub(ISSUE_RE,mapissue, s) # convert Google Code issue refs to Github markup
     return s
 
 def github_label(name, color = "FFFFFF"):
