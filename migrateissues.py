@@ -162,19 +162,36 @@ def get_gcode_issue(issue_summary):
         comment = pq(comment)
         if not comment('.date'):
             continue # Sign in prompt line uses same class
-        comment = {
-            'date': comment('.date').attr('title'), # TODO: transform to better format
-            'author': comment('.userlink').text(),
-            'body': comment('pre').text()
-        }
+
+        date = comment('.date').attr('title') # TODO: transform to better format
+        author = comment('.userlink').text()
+        body = comment('pre').text()
+
         updates = comment('.updates .box-inner')
         if updates:
-            if comment['body'] == '(No comment was entered for this change.)':
-                comment['body'] = ''
-            else:
-                comment['body'] += '\n\n'
-            comment['body'] += updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
-        issue['comments'].append(comment)
+            body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
+
+        attachments = comment('.attachments')
+        if attachments:
+            body += '\n\n'
+        for attachment in (pq(a) for a in attachments):
+            if not attachment('a'): # Skip deleted attachments
+                continue
+
+            # Linking to the comment with the attachment rather than the
+            # attachment itself since Google Code uses download tokens for
+            # attachments
+            body += '**Attachment:** [{}]({}#{})'.format(
+                    attachment('b').text(), issue['link'], comment.attr('id'))
+
+        # Strip the placeholder text if there's any other updates
+        body = body.replace('(No comment was entered for this change.)\n\n', '')
+
+        issue['comments'].append({
+            'date': date,
+            'author': author,
+            'body': body
+        })
 
     return issue
 

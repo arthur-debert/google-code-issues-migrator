@@ -13,8 +13,8 @@ creating matching issues and comments in Github. This has some limitations:
    adding a non-obtrusive header to each issue and comment stating the original
    author and creation date.
 
- - Attachments are lost, since Github doesn't support them in issues or
-   comments.
+ - Github doesn't support attachments for issues, so any attachments are simply
+   listed as links to the attachment on Google Code.
 
  - Support for Merged-into links for duplicate issues are not implemented.
 
