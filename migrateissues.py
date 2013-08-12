@@ -75,10 +75,6 @@ def parse_gcode_date(date_text):
     return parsed.strftime("%B %d, %Y %H:%M:%S")
 
 
-def should_migrate_comment(comment):
-    return '(No comment was entered for this change.)' not in comment
-
-
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
@@ -112,12 +108,9 @@ def add_comments_to_issue(github_issue, gcode_issue):
     # Retrieve existing Github comments, to figure out which Google Code comments are new
     existing_comments = [comment.body for comment in github_issue.get_comments()]
 
-    comments = [comment for comment in gcode_issue['comments']
-                if should_migrate_comment(comment)]
-
     # Add any remaining comments to the Github issue
     output(", adding comments")
-    for i, comment in enumerate(comments):
+    for i, comment in enumerate(gcode_issue['comments']):
         body = '_From {author} on {date}_\n\n{body}'.format(**comment)
         if body in existing_issues:
             logging.info('Skipping comment %d: already present', i + 1)
@@ -169,11 +162,19 @@ def get_gcode_issue(issue_summary):
         comment = pq(comment)
         if not comment('.date'):
             continue # Sign in prompt line uses same class
-        issue['comments'].append({
+        comment = {
             'date': comment('.date').attr('title'), # TODO: transform to better format
             'author': comment('.userlink').text(),
             'body': comment('pre').text()
-        })
+        }
+        updates = comment('.updates .box-inner')
+        if updates:
+            if comment['body'] == '(No comment was entered for this change.)':
+                comment['body'] = ''
+            else:
+                comment['body'] += '\n\n'
+            comment['body'] += updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
+        issue['comments'].append(comment)
 
     return issue
 
