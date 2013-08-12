@@ -112,7 +112,7 @@ def add_comments_to_issue(github_issue, gcode_issue):
     output(", adding comments")
     for i, comment in enumerate(gcode_issue['comments']):
         body = '_From {author} on {date}_\n\n{body}'.format(**comment)
-        if body in existing_issues:
+        if body in existing_comments:
             logging.info('Skipping comment %d: already present', i + 1)
         else:
             logging.info('Adding comment %d', i + 1)
