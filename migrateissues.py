@@ -125,6 +125,22 @@ def add_comments_to_issue(github_issue, gcode_issue):
             output('.')
 
 
+def get_attachments(link, attachments):
+    if not attachments:
+        return ''
+
+    body = '\n\n'
+    for attachment in (pq(a) for a in attachments):
+        if not attachment('a'): # Skip deleted attachments
+            continue
+
+        # Linking to the comment with the attachment rather than the
+        # attachment itself since Google Code uses download tokens for
+        # attachments
+        body += '**Attachment:** [{}]({})'.format(attachment('b').text(), link)
+    return body
+
+
 def get_gcode_issue(issue_summary):
     # Populate properties available from the summary CSV
     issue = {
@@ -156,8 +172,9 @@ def get_gcode_issue(issue_summary):
     doc = pq(urllib2.urlopen(issue['link']).read())
     issue['content'] = doc('.issuedescription .issuedescription pre').text()
 
-    issue['content'] = '_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}\n\n{footer}'.format(
+    issue['content'] = '_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
+            attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments')),
             **issue)
 
     issue['comments'] = []
@@ -174,18 +191,7 @@ def get_gcode_issue(issue_summary):
         if updates:
             body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
 
-        attachments = comment('.attachments')
-        if attachments:
-            body += '\n\n'
-        for attachment in (pq(a) for a in attachments):
-            if not attachment('a'): # Skip deleted attachments
-                continue
-
-            # Linking to the comment with the attachment rather than the
-            # attachment itself since Google Code uses download tokens for
-            # attachments
-            body += '**Attachment:** [{}]({}#{})'.format(
-                    attachment('b').text(), issue['link'], comment.attr('id'))
+        body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'))
 
         # Strip the placeholder text if there's any other updates
         body = body.replace('(No comment was entered for this change.)\n\n', '')
