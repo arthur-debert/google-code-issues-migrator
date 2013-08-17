@@ -142,12 +142,15 @@ def get_attachments(link, attachments):
 
 
 def get_gcode_issue(issue_summary):
+    def get_author(doc):
+        userlink = doc('.userlink')
+        return '[{}](https://code.google.com{})'.format(userlink.text(), userlink.attr('href'))
+
     # Populate properties available from the summary CSV
     issue = {
         'gid': int(issue_summary['ID']),
         'title': issue_summary['Summary'].replace('%', '&#37;'),
         'link': GOOGLE_URL.format(google_project_name, issue_summary['ID']),
-        'author': issue_summary['Reporter'],
         'owner': issue_summary['Owner'],
         'state': 'closed' if issue_summary['Closed'] else 'open',
         'date': datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])),
@@ -173,9 +176,11 @@ def get_gcode_issue(issue_summary):
     if options.google_code_cookie:
         opener.addheaders = [('Cookie', options.google_code_cookie)]
     doc = pq(opener.open(issue['link']).read())
-    issue['content'] = doc('.issuedescription .issuedescription pre').text()
 
+    description = doc('.issuedescription .issuedescription')
+    issue['author'] = get_author(description)
     issue['content'] = '_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
+            content = description('pre').text(),
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
             attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments')),
             **issue)
@@ -187,8 +192,8 @@ def get_gcode_issue(issue_summary):
             continue # Sign in prompt line uses same class
 
         date = parse_gcode_date(comment('.date').attr('title'))
-        author = comment('.userlink').text()
         body = comment('pre').text()
+        author = get_author(comment)
 
         updates = comment('.updates .box-inner')
         if updates:
