@@ -71,7 +71,11 @@ def github_label(name, color = "FFFFFF"):
 def parse_gcode_date(date_text):
     """ Transforms a Google Code date into a more human readable string. """
 
-    parsed = datetime.strptime(date_text, "%Y-%m-%dT%H:%M:%S.000Z")
+    try:
+        parsed = datetime.strptime(date_text, '%a %b %d %H:%M:%S %Y')
+    except ValueError:
+        return date_text
+
     return parsed.strftime("%B %d, %Y %H:%M:%S")
 
 
@@ -152,8 +156,7 @@ def get_gcode_issue(issue_summary):
     doc = pq(urllib2.urlopen(issue['link']).read())
     issue['content'] = doc('.issuedescription .issuedescription pre').text()
 
-    # TODO date formatting
-    issue['content'] = '_From {author} on {date}_\n\n{content}\n\n{footer}'.format(
+    issue['content'] = '_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}\n\n{footer}'.format(
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
             **issue)
 
@@ -163,7 +166,7 @@ def get_gcode_issue(issue_summary):
         if not comment('.date'):
             continue # Sign in prompt line uses same class
 
-        date = comment('.date').attr('title') # TODO: transform to better format
+        date = parse_gcode_date(comment('.date').attr('title'))
         author = comment('.userlink').text()
         body = comment('pre').text()
 
