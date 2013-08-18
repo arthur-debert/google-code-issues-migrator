@@ -190,6 +190,8 @@ def get_gcode_issue(issue_summary):
         comment = pq(comment)
         if not comment('.date'):
             continue # Sign in prompt line uses same class
+        if comment.hasClass('delcom'):
+            continue # Skip deleted comments
 
         date = parse_gcode_date(comment('.date').attr('title'))
         body = comment('pre').text()
