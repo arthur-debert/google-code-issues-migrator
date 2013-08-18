@@ -115,7 +115,7 @@ def add_comments_to_issue(github_issue, gcode_issue):
     # Add any remaining comments to the Github issue
     output(", adding comments")
     for i, comment in enumerate(gcode_issue['comments']):
-        body = '_From {author} on {date}_\n\n{body}'.format(**comment)
+        body = u'_From {author} on {date}_\n\n{body}'.format(**comment)
         if body in existing_comments:
             logging.info('Skipping comment %d: already present', i + 1)
         else:
@@ -179,7 +179,7 @@ def get_gcode_issue(issue_summary):
 
     description = doc('.issuedescription .issuedescription')
     issue['author'] = get_author(description)
-    issue['content'] = '_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
+    issue['content'] = u'_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
             content = description('pre').text(),
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
             attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments')),
