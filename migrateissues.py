@@ -179,8 +179,23 @@ def get_gcode_issue(issue_summary):
 
     description = doc('.issuedescription .issuedescription')
     issue['author'] = get_author(description)
+
+    issue['comments'] = []
+    def split_comment(comment, text):
+        # Github has an undocumented maximum comment size (unless I just failed
+        # to find where it was documented), so split comments up into multiple
+        # posts as needed.
+        while text:
+            comment['body'] = text[:7000]
+            text = text[7000:]
+            if text:
+                comment['body'] += '...'
+                text = '...' + text
+            issue['comments'].append(comment.copy())
+
+    split_comment(issue, description('pre').text())
     issue['content'] = u'_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
-            content = description('pre').text(),
+            content = issue['comments'].pop(0)['body'],
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
             attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments')),
             **issue)
@@ -206,11 +221,7 @@ def get_gcode_issue(issue_summary):
         # Strip the placeholder text if there's any other updates
         body = body.replace('(No comment was entered for this change.)\n\n', '')
 
-        issue['comments'].append({
-            'date': date,
-            'author': author,
-            'body': body
-        })
+        split_comment({'date': date, 'author': author}, body)
 
     return issue
 
