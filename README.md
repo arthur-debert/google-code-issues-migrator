@@ -3,6 +3,16 @@ This is a simple script to migrate issues from Google Code to Github.
 For a full history of changes, please
 consult the [change log](https://github.com/arthur-debert/google-code-issues-migrator/blob/master/CHANGES.md).
 
+## THIS SCRIPT WILL SEND A LOT OF EMAILS TO ALL WATCHERS
+
+Github's API does not support creating issues or adding comments without
+notifying everyone watching the repository. As a result, running this script
+targetting an existing repository with watchers who do not want to recieve a
+very large number of emails is probably not a good idea.
+
+I do not know of any way around this other than deleting and recreating the
+repository immediately before running the import.
+
 ### How it works ###
 
 The script iterates over the issues and comments in a Google Code repository,
