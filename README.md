@@ -53,6 +53,7 @@ Run `pip install -r requirements.txt` to install all required libraries.
       -p, --omit-priority       Don't migrate priority labels
       -s, --synchronize-ids     Ensure that migrated issues keep the same ID
       -c, --google-code-cookie  Supply cookies to use for scraping Google Code
+      --skip-closed             Skip all closed bugs
 
         You will be prompted for your github password.
 
@@ -79,3 +80,5 @@ works, of course, if the migration starts with a fresh Github repistory.
 pages from Google Code. Google Code normally mangles names for spam prevention,
 and getting the raw names requires being logged in and having filled out a
 CAPTCHA.
+
+`--skip-closed` will skip migrating issues that were closed.
