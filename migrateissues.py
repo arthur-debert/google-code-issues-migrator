@@ -139,7 +139,7 @@ def get_attachments(link, attachments):
         # Linking to the comment with the attachment rather than the
         # attachment itself since Google Code uses download tokens for
         # attachments
-        body += '**Attachment:** [{}]({})'.format(attachment('b').text(), link)
+        body += '**Attachment:** [{}]({})'.format(attachment('b').text().encode('utf-8'), link)
     return body
 
 
