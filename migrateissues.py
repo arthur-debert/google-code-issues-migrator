@@ -93,6 +93,8 @@ def add_issue_to_github(issue):
 
     output('Adding issue %d' % issue['gid'])
 
+    github_issue = None
+
     if not options.dry_run:
         github_labels = [github_label(label) for label in issue['labels']]
         github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels)
