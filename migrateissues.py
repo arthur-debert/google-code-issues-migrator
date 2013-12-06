@@ -131,7 +131,7 @@ def get_attachments(link, attachments):
     if not attachments:
         return ''
 
-    body = '\n\n'
+    body = u'\n\n'
     for attachment in (pq(a) for a in attachments):
         if not attachment('a'): # Skip deleted attachments
             continue
@@ -139,7 +139,7 @@ def get_attachments(link, attachments):
         # Linking to the comment with the attachment rather than the
         # attachment itself since Google Code uses download tokens for
         # attachments
-        body += '**Attachment:** [{}]({})'.format(attachment('b').text().encode('utf-8'), link)
+        body += u'**Attachment:** [{}]({})'.format(attachment('b').text(), link)
     return body
 
 
