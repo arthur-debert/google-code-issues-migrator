@@ -165,6 +165,8 @@ def get_gcode_issue(issue_summary):
     for label in issue_summary['AllLabels'].split(', '):
         if label.startswith('Priority-') and options.omit_priority:
             continue
+        if not label:
+            continue
         labels.append(LABEL_MAPPING.get(label, label))
 
     # Add additional labels based on the issue's state
