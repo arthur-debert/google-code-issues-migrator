@@ -46,6 +46,8 @@ STATE_MAPPING = {
     'wontfix': 'wontfix'
 }
 
+MENTIONS_PATTERN = re.compile(r'(.*(?:\s|^))@([a-zA-Z0-9]+\b)')
+
 def output(string):
     sys.stdout.write(string)
     sys.stdout.flush()
@@ -78,6 +80,15 @@ def parse_gcode_date(date_text):
 
     return parsed.strftime("%B %d, %Y %H:%M:%S")
 
+
+def dereference(matchobj):
+    if matchobj.group(1):
+        return matchobj.group(1) + "@-" + matchobj.group(2)
+    else:
+        return "@-" + matchobj.group(2)
+
+def dereferenceMention(content):
+    return MENTIONS_PATTERN.sub(dereference, content)
 
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
@@ -197,7 +208,7 @@ def get_gcode_issue(issue_summary):
                 text = '...' + text
             issue['comments'].append(comment.copy())
 
-    split_comment(issue, description('pre').text())
+    split_comment(issue, dereferenceMention(description('pre').text()))
     issue['content'] = u'_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
             content = issue['comments'].pop(0)['body'],
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
@@ -213,7 +224,7 @@ def get_gcode_issue(issue_summary):
             continue # Skip deleted comments
 
         date = parse_gcode_date(comment('.date').attr('title'))
-        body = comment('pre').text()
+        body = dereferenceMention(comment('pre').text())
         author = get_author(comment)
 
         updates = comment('.updates .box-inner')
