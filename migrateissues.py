@@ -288,6 +288,10 @@ def process_gcode_issues(existing_issues):
         previous_gid = options.start_at - 1
         output('Starting at issue %d\n' % options.start_at)
 
+    if options.end_at is not None:
+        issues = [x for x in issues if int(x['ID']) <= options.end_at]
+        output('End at issue %d\n' % options.end_at)
+
     for issue in issues:
         issue = get_gcode_issue(issue)
 
@@ -378,6 +382,7 @@ if __name__ == "__main__":
     parser.add_option("-c", "--google-code-cookie", dest = "google_code_cookie", help = "Cookie to use for Google Code requests. Required to get unmangled names", default = '')
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
+    parser.add_option('--end-at', dest = 'end_at', help = 'End at the given Google Code issue number', default = None, type = int)
 
     options, args = parser.parse_args()
 
