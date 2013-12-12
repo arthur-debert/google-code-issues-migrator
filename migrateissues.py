@@ -427,6 +427,13 @@ if __name__ == "__main__":
 
     try:
         existing_issues = get_existing_github_issues()
+
+        for i in existing_issues.values():
+            if i.milestone:
+                m = i.milestone
+                milestone_number.setdefault(m.title, m.number)
+                milestone_cache.setdefault(m.title, m)
+
         log_rate_info()
         process_gcode_issues(existing_issues)
     except Exception:
