@@ -69,6 +69,19 @@ def github_label(name, color = "FFFFFF"):
         except GithubException:
             return label_cache.setdefault(name, github_repo.create_label(name, color))
 
+def github_milestone(name):
+    """ Returns the Github milestone with given name, creating it if necessary. """
+
+    try:
+        return milestone_cache[name]
+    except KeyError:
+        try:
+            number = milestone_number[name]
+            return milestone_cache.setdefault(name, github_repo.get_milestone(number))
+        except KeyError:
+            m = milestone_cache.setdefault(name, github_repo.create_milestone(name))
+            milestone_number.setdefault(name, m.number)
+            return m
 
 def parse_gcode_date(date_text):
     """ Transforms a Google Code date into a more human readable string. """
@@ -108,10 +121,11 @@ def add_issue_to_github(issue):
 
     if not options.dry_run:
         github_labels = [github_label(label) for label in issue['labels']]
+        milestone = github_milestone(issue['milestone'])
         issue['title'] = issue['title'].strip()
         if issue['title'] == '':
             issue['title'] = "(empty title)"
-        github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels)
+        github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels, milestone = milestone)
 
     # Assigns issues that originally had an owner to the current user
     if issue['owner'] and options.assign_owner:
@@ -173,11 +187,16 @@ def get_gcode_issue(issue_summary):
         'status': issue_summary['Status'].lower()
     }
 
+    issue['milestone'] = "backlog"
+
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
     labels = ['imported']
     for label in issue_summary['AllLabels'].split(', '):
         if label.startswith('Priority-') and options.omit_priority:
+            continue
+        if label.startswith('Milestone-'):
+            issue['milestone'] = label[10:]
             continue
         if not label:
             continue
@@ -367,6 +386,8 @@ if __name__ == "__main__":
         sys.exit()
 
     label_cache = {} # Cache Github tags, to avoid unnecessary API requests
+    milestone_cache = {}
+    milestone_number = {}
 
     google_project_name, github_user_name, github_project = args
 
