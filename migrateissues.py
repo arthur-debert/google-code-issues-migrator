@@ -125,8 +125,9 @@ def add_issue_to_github(issue):
         issue['title'] = issue['title'].strip()
         if issue['title'] == '':
             issue['title'] = "(empty title)"
-        #github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels, milestone = milestone)
-    print(json.dumps(issue, indent=4, separators=(',', ': ')))
+        github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels, milestone = milestone)
+    else:
+        print(json.dumps(issue, indent=4, separators=(',', ': ')))
 
     # Assigns issues that originally had an owner to the current user
     if issue['owner'] and options.assign_owner:
@@ -152,11 +153,11 @@ def add_comments_to_issue(github_issue, gcode_issue):
         else:
             logging.info('Adding comment %d', i + 1)
             if not options.dry_run:
-                #github_issue.create_comment(body.encode('utf-8'))
-                pass
-            output('.')
-            print("comment:")
-            print(body)
+                github_issue.create_comment(body.encode('utf-8'))
+                output('.')
+            else:
+                print("comment:")
+                print(body)
 
 
 def get_attachments(link, attachments):
