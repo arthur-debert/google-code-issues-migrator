@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+import json
 import csv
 import getpass
 import logging
@@ -87,12 +89,10 @@ def parse_gcode_date(date_text):
     """ Transforms a Google Code date into a more human readable string. """
 
     try:
-        parsed = datetime.strptime(date_text, '%a %b %d %H:%M:%S %Y')
+        parsed = datetime.strptime(date_text, '%a %b %d %H:%M:%S %Y').isoformat()
+        return parsed + "Z"
     except ValueError:
         return date_text
-
-    return parsed.strftime("%B %d, %Y %H:%M:%S")
-
 
 def dereference(matchobj):
     if matchobj.group(1):
@@ -125,7 +125,8 @@ def add_issue_to_github(issue):
         issue['title'] = issue['title'].strip()
         if issue['title'] == '':
             issue['title'] = "(empty title)"
-        github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels, milestone = milestone)
+        #github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels, milestone = milestone)
+    print(json.dumps(issue, indent=4, separators=(',', ': ')))
 
     # Assigns issues that originally had an owner to the current user
     if issue['owner'] and options.assign_owner:
@@ -151,8 +152,11 @@ def add_comments_to_issue(github_issue, gcode_issue):
         else:
             logging.info('Adding comment %d', i + 1)
             if not options.dry_run:
-                github_issue.create_comment(body.encode('utf-8'))
+                #github_issue.create_comment(body.encode('utf-8'))
+                pass
             output('.')
+            print("comment:")
+            print(body)
 
 
 def get_attachments(link, attachments):
@@ -183,7 +187,7 @@ def get_gcode_issue(issue_summary):
         'link': GOOGLE_URL.format(google_project_name, issue_summary['ID']),
         'owner': issue_summary['Owner'],
         'state': 'closed' if issue_summary['Closed'] else 'open',
-        'date': datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])),
+        'date': datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])).isoformat() + "Z",
         'status': issue_summary['Status'].lower()
     }
 
@@ -215,7 +219,13 @@ def get_gcode_issue(issue_summary):
     doc = pq(opener.open(issue['link']).read())
 
     description = doc('.issuedescription .issuedescription')
-    issue['author'] = get_author(description)
+    aid = get_author(description)
+    author = aid
+    try:
+        author = authors_cache[aid]
+    except KeyError:
+        authors_cache[aid] = aid
+    issue['author'] = author
 
     issue['comments'] = []
     def split_comment(comment, text):
@@ -231,7 +241,7 @@ def get_gcode_issue(issue_summary):
             issue['comments'].append(comment.copy())
 
     split_comment(issue, dereferenceMention(description('pre').text()))
-    issue['content'] = u'_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
+    issue['content'] = u'_From {author} on {date}_\n\n{content}{attachments}\n\n{footer}'.format(
             content = issue['comments'].pop(0)['body'],
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
             attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments')),
@@ -246,14 +256,21 @@ def get_gcode_issue(issue_summary):
             continue # Skip deleted comments
 
         date = parse_gcode_date(comment('.date').attr('title'))
-        body = dereferenceMention(comment('pre').text())
+        try:
+            body = dereferenceMention(comment('pre').text())
+        except UnicodeDecodeError:
+            body = u'FIXME: unicode err'
+            print("unicode err", file=sys.stderr)
         author = get_author(comment)
 
         updates = comment('.updates .box-inner')
         if updates:
             body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
 
-        body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'))
+        try:
+            body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'))
+        except UnicodeDecodeError:
+            print("unicode err 2", file=sys.stderr)
 
         # Strip the placeholder text if there's any other updates
         body = body.replace('(No comment was entered for this change.)\n\n', '')
@@ -390,6 +407,8 @@ if __name__ == "__main__":
         parser.print_help()
         sys.exit()
 
+    authors_cache = {}
+
     label_cache = {} # Cache Github tags, to avoid unnecessary API requests
     milestone_cache = {}
     milestone_number = {}
@@ -402,7 +421,7 @@ if __name__ == "__main__":
             Github(github_user_name, github_password).get_user().login
             break
         except BadCredentialsException:
-            print "Bad credentials, try again."
+            print("Bad credentials, try again.")
 
     github = Github(github_user_name, github_password)
     log_rate_info()
@@ -439,3 +458,8 @@ if __name__ == "__main__":
     except Exception:
         parser.print_help()
         raise
+
+    import pickle
+    f = open("author.dat", "w+")
+    pickle.dump(authors_cache, f)
+    f.close()
