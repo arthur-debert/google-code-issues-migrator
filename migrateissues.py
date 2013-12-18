@@ -214,8 +214,6 @@ def get_gcode_issue(issue_summary):
 
     # Scrape the issue details page for the issue body and comments
     opener = urllib2.build_opener()
-    if options.google_code_cookie:
-        opener.addheaders = [('Cookie', options.google_code_cookie)]
     doc = pq(opener.open(issue['link']).read())
 
     description = doc('.issuedescription .issuedescription')
@@ -396,7 +394,6 @@ if __name__ == "__main__":
     parser.add_option("-d", "--dry-run", action = "store_true", dest = "dry_run", help = "Don't modify anything on Github", default = False)
     parser.add_option("-p", "--omit-priority", action = "store_true", dest = "omit_priority", help = "Don't migrate priority labels", default = False)
     parser.add_option("-s", "--synchronize-ids", action = "store_true", dest = "synchronize_ids", help = "Ensure that migrated issues keep the same ID", default = False)
-    parser.add_option("-c", "--google-code-cookie", dest = "google_code_cookie", help = "Cookie to use for Google Code requests. Required to get unmangled names", default = '')
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
     parser.add_option('--end-at', dest = 'end_at', help = 'End at the given Google Code issue number', default = None, type = int)
