@@ -114,7 +114,7 @@ def add_issue_to_github(issue):
                          "_Original issue: " +
                          issue['link'] + "_\r\n")
     else:
-        issue['body'] = ("bc..\r\n" + issue['body'] + "\r\n" +
+        issue['body'] = ("bc.. " + issue['body'] + "\r\n" +
                          "p. _Original issue: _" +
                          '"_' + issue['link'] + '_":' +
                          issue['link'] + "\r\n")
@@ -133,7 +133,7 @@ def add_issue_to_github(issue):
             if gt(c['created_at']) >= markdown_date:
                 c['body'] = "'''\r\n" + c['body'] + "\r\n'''\r\n"
             else:
-                c['body'] = "bc..\r\n" + c['body'] + "\r\n"
+                c['body'] = "bc.. " + c['body'] + "\r\n"
 
         comments = comments_fixed
 
