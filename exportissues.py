@@ -51,6 +51,9 @@ STATE_MAPPING = {
 
 MENTIONS_PATTERN = re.compile(r'(.*(?:\s|^))@([a-zA-Z0-9]+\b)')
 
+milestones = {}
+mnum = 1
+
 def output(string):
     sys.stdout.write(string)
     sys.stdout.flush()
@@ -115,14 +118,21 @@ def add_issue_to_github(issue):
         issue['created_at'] = issue['date']
         del issue['date']
         del issue['status']
-        if issue['owner']:
-            issue['assignee'] = issue['owner']
-            del issue['owner']
+        try:
+            if issue['owner']:
+                issue['assignee'] = issue['owner']
+                del issue['owner']
+            del issue['Cc']
+        except KeyError:
+            pass
+        del issue['link']
         f = open("issues/" + str(gid) + ".json", "w")
         f.write(json.dumps(issue, indent=4, separators=(',', ': '), sort_keys=True))
+        f.write('\n')
         f.close()
         f = open("issues/" + str(gid) + ".comments.json", "w")
         f.write(json.dumps(comments, indent=4, separators=(',', ': '), sort_keys=True))
+        f.write('\n')
         f.close()
 
     return github_issue
@@ -182,7 +192,10 @@ def get_gcode_issue(issue_summary):
         'status': issue_summary['Status'].lower()
     }
 
-    issue['milestone'] = "backlog"
+    global mnum
+    global milestones
+
+    ms = "backlog"
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
@@ -191,11 +204,22 @@ def get_gcode_issue(issue_summary):
         if label.startswith('Priority-') and options.omit_priority:
             continue
         if label.startswith('Milestone-'):
-            issue['milestone'] = label[10:]
+            ms = label[10:]
             continue
         if not label:
             continue
         labels.append(LABEL_MAPPING.get(label, label))
+
+    try:
+        milestones[ms]
+    except KeyError:
+        milestones[ms] = {'number': mnum,
+                          'state': 'open',
+                          'creator': {'email': 'asmeurer@gmail.com'},
+                          'title': ms
+                          }
+        mnum+=1
+    issue['milestone'] = milestones[ms]['number']
 
     # Add additional labels based on the issue's state
     if issue['status'] in STATE_MAPPING:
@@ -230,7 +254,7 @@ def get_gcode_issue(issue_summary):
                     except KeyError:
                         authors_cache[oid] = oid
                     owner = authors_cache[oid]
-                    issue['owner'] = owner
+                    issue['owner'] = {'email': owner}
                     break # only one owner
             break
 
@@ -248,7 +272,7 @@ def get_gcode_issue(issue_summary):
                     except KeyError:
                         authors_cache[cid] = cid
                     cc = authors_cache[cid]
-                    issue['Cc'].append(cc)
+                    issue['Cc'].append({'email': cc})
             break
 
     issue['comments'] = []
@@ -358,6 +382,16 @@ def process_gcode_issues(existing_issues):
                 github_issue.edit(state = issue['state'])
         output('\n')
 
+    if milestones:
+        print("Milestones:")
+        print(json.dumps(milestones, indent=4, separators=(',', ': '), sort_keys=True))
+
+        for m in milestones.values():
+            f = open('milestones/' + str(m['number']) + '.json', 'w')
+            f.write(json.dumps(m, indent=4, separators=(',', ': '), sort_keys=True))
+            f.write('\n')
+            f.close()
+
 
 if __name__ == "__main__":
     usage = "usage: %prog [options] <google project name> <github username> <github project>"
@@ -392,8 +426,6 @@ if __name__ == "__main__":
     authors_cache_orig = authors_cache.copy()
 
     label_cache = {} # Cache Github tags, to avoid unnecessary API requests
-    milestone_cache = {}
-    milestone_number = {}
 
     try:
         existing_issues = []
