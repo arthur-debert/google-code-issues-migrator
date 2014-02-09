@@ -217,7 +217,6 @@ def get_gcode_issue(issue_summary):
             except KeyError:
                 milestones[ms] = {'number': mnum,
                                   'state': 'open',
-                                  'creator': {'email': 'skirpichev@gmail.com'},
                                   'title': ms,
                                   'created_at': issue['date']
                                   }
