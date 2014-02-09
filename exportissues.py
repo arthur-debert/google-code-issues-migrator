@@ -119,10 +119,13 @@ def add_issue_to_github(issue):
         del issue['date']
         del issue['status']
         try:
+            del issue['Cc']
+        except KeyError:
+            pass
+        try:
             if issue['owner']:
                 issue['assignee'] = issue['owner']
-                del issue['owner']
-            del issue['Cc']
+            del issue['owner']
         except KeyError:
             pass
         del issue['link']
@@ -314,7 +317,7 @@ def get_gcode_issue(issue_summary):
         try:
             authors_cache[uid]
         except KeyError:
-            authors_cache[uid] = user
+            authors_cache[uid] = uid
         user = authors_cache[uid]
 
         updates = comment('.updates .box-inner')
