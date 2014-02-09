@@ -106,6 +106,25 @@ def add_issue_to_github(issue):
     else:
         print(json.dumps(issue, indent=4, separators=(',', ': ')))
 
+        gid = issue['gid']
+        issue['number'] = gid
+        del issue['gid']
+        comments = issue['comments']
+        del issue['comments']
+        del issue['content']
+        issue['created_at'] = issue['date']
+        del issue['date']
+        del issue['status']
+        if issue['owner']:
+            issue['assignee'] = issue['owner']
+            del issue['owner']
+        f = open("issues/" + str(gid) + ".json", "w")
+        f.write(json.dumps(issue, indent=4, separators=(',', ': '), sort_keys=True))
+        f.close()
+        f = open("issues/" + str(gid) + ".comments.json", "w")
+        f.write(json.dumps(comments, indent=4, separators=(',', ': '), sort_keys=True))
+        f.close()
+
     return github_issue
 
 
