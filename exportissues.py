@@ -50,18 +50,9 @@ STATE_MAPPING = {
     'wontfix': 'wontfix'
 }
 
-MENTIONS_PATTERN = re.compile(r'(.*(?:\s|^))@([a-zA-Z0-9]+\b)')
-
-
 def output(string):
     sys.stdout.write(string)
     sys.stdout.flush()
-
-def escape(s):
-    """Process text to convert markup and escape things which need escaping"""
-    if s:
-        s = s.replace('%', '&#37;')  # Escape % signs
-    return s
 
 
 def parse_gcode_date(date_text):
@@ -72,17 +63,6 @@ def parse_gcode_date(date_text):
         return parsed + "Z"
     except ValueError:
         return date_text
-
-
-def dereference(matchobj):
-    if matchobj.group(1):
-        return matchobj.group(1) + "@-" + matchobj.group(2)
-    else:
-        return "@-" + matchobj.group(2)
-
-
-def dereferenceMention(content):
-    return MENTIONS_PATTERN.sub(dereference, content)
 
 
 def gt(dt_str):
@@ -96,8 +76,6 @@ def add_issue_to_github(issue):
     # through adding an issue it could end up in an incomplete state.  To avoid this we'll
     # ensure that there are enough requests remaining before we start migrating an issue.
 
-    body = issue['content'].replace('%', '&#37;')
-
     output('Adding issue %d' % issue['gid'])
 
     print(json.dumps(issue, indent=4, separators=(',', ': ')))
@@ -107,7 +85,6 @@ def add_issue_to_github(issue):
     del issue['gid']
     comments = issue['comments']
     del issue['comments']
-    del issue['content']
     issue['created_at'] = issue['date']
     del issue['date']
     del issue['status']
@@ -290,25 +267,7 @@ def get_gcode_issue(issue_summary):
                         issue['Cc'].append({'email': cc})
             break
 
-    issue['comments'] = []
-    def split_comment(comment, text):
-        # Github has an undocumented maximum comment size (unless I just failed
-        # to find where it was documented), so split comments up into multiple
-        # posts as needed.
-        while text:
-            comment['body'] = text[:7000]
-            text = text[7000:]
-            if text:
-                comment['body'] += '...'
-                text = '...' + text
-            issue['comments'].append(comment.copy())
-
-    split_comment(issue, dereferenceMention(description('pre').text()))
-    issue['content'] = u'_From {user} on {date}_\n\n{content}{attachments}\n\n{footer}'.format(
-            content = issue['comments'].pop(0)['body'],
-            footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
-            attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments')),
-            **issue)
+    issue['body'] = description('pre').text()
 
     issue['comments'] = []
     for comment in doc('.issuecomment'):
@@ -320,7 +279,7 @@ def get_gcode_issue(issue_summary):
 
         date = parse_gcode_date(comment('.date').attr('title'))
         try:
-            body = dereferenceMention(comment('pre').text())
+            body = comment('pre').text()
         except UnicodeDecodeError:
             body = u'FIXME: UnicodeDecodeError'
 
@@ -347,7 +306,7 @@ def get_gcode_issue(issue_summary):
         if body.find('**Status:** Fixed') >= 0:
             issue['closed_at'] = date
 
-        split_comment({'date': date, 'user': {'email': user}}, body)
+        issue['comments'].append({'date': date, 'user': {'email': user}, 'body': body})
 
     return issue
 
