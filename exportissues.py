@@ -85,6 +85,10 @@ def dereferenceMention(content):
     return MENTIONS_PATTERN.sub(dereference, content)
 
 
+def gt(dt_str):
+    return datetime.strptime(dt_str.rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
+
+
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
@@ -118,13 +122,33 @@ def add_issue_to_github(issue):
     except KeyError:
         pass
     del issue['link']
-    issue['updated_at'] = datetime.fromtimestamp(int(time())).isoformat() + "Z"
+    updated_at = datetime.fromtimestamp(int(time())).isoformat() + "Z"
+    issue['updated_at'] = updated_at
+
+    markdown_date = gt('2009-04-20T19:00:00Z')
+
+    if gt(issue['created_at']) >= markdown_date:
+        issue['body'] = "'''\r\n" + issue['body'] + "\r\n'''\r\n"
+    else:
+        issue['body'] = "bc..\r\n" + issue['body'] + "\r\n"
 
     with open("issues/" + str(gid) + ".json", "w") as f:
         f.write(json.dumps(issue, indent=4, separators=(',', ': '), sort_keys=True))
         f.write('\n')
 
     with open("issues/" + str(gid) + ".comments.json", "w") as f:
+        comments_fixed = list(comments)
+        for c in comments:
+            c['created_at'] = c['date']
+            del c['date']
+            c['updated_at'] = updated_at
+            if gt(c['created_at']) >= markdown_date:
+                c['body'] = "'''\r\n" + c['body'] + "\r\n'''\r\n"
+            else:
+                c['body'] = "bc..\r\n" + c['body'] + "\r\n"
+
+        comments = comments_fixed
+
         f.write(json.dumps(comments, indent=4, separators=(',', ': '), sort_keys=True))
         f.write('\n')
 
