@@ -52,8 +52,6 @@ STATE_MAPPING = {
 
 MENTIONS_PATTERN = re.compile(r'(.*(?:\s|^))@([a-zA-Z0-9]+\b)')
 
-milestones = {}
-mnum = 1
 
 def output(string):
     sys.stdout.write(string)
@@ -98,49 +96,37 @@ def add_issue_to_github(issue):
 
     output('Adding issue %d' % issue['gid'])
 
-    github_issue = None
+    print(json.dumps(issue, indent=4, separators=(',', ': ')))
 
-    if not options.dry_run:
-        github_labels = [github_label(label) for label in issue['labels']]
-        milestone = github_milestone(issue['milestone'])
-        issue['title'] = issue['title'].strip()
-        if issue['title'] == '':
-            issue['title'] = "(empty title)"
-        github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels, milestone = milestone)
-    else:
-        print(json.dumps(issue, indent=4, separators=(',', ': ')))
+    gid = issue['gid']
+    issue['number'] = gid
+    del issue['gid']
+    comments = issue['comments']
+    del issue['comments']
+    del issue['content']
+    issue['created_at'] = issue['date']
+    del issue['date']
+    del issue['status']
+    try:
+        del issue['Cc']
+    except KeyError:
+        pass
+    try:
+        if issue['owner']:
+            issue['assignee'] = issue['owner']
+        del issue['owner']
+    except KeyError:
+        pass
+    del issue['link']
+    issue['updated_at'] = datetime.fromtimestamp(int(time())).isoformat() + "Z"
 
-        gid = issue['gid']
-        issue['number'] = gid
-        del issue['gid']
-        comments = issue['comments']
-        del issue['comments']
-        del issue['content']
-        issue['created_at'] = issue['date']
-        del issue['date']
-        del issue['status']
-        try:
-            del issue['Cc']
-        except KeyError:
-            pass
-        try:
-            if issue['owner']:
-                issue['assignee'] = issue['owner']
-            del issue['owner']
-        except KeyError:
-            pass
-        del issue['link']
-        issue['updated_at'] = datetime.fromtimestamp(int(time())).isoformat() + "Z"
-        f = open("issues/" + str(gid) + ".json", "w")
+    with open("issues/" + str(gid) + ".json", "w") as f:
         f.write(json.dumps(issue, indent=4, separators=(',', ': '), sort_keys=True))
         f.write('\n')
-        f.close()
-        f = open("issues/" + str(gid) + ".comments.json", "w")
+
+    with open("issues/" + str(gid) + ".comments.json", "w") as f:
         f.write(json.dumps(comments, indent=4, separators=(',', ': '), sort_keys=True))
         f.write('\n')
-        f.close()
-
-    return github_issue
 
 
 def add_comments_to_issue(github_issue, gcode_issue):
@@ -196,7 +182,7 @@ def get_gcode_issue(issue_summary):
     global mnum
     global milestones
 
-    ms = ""
+    ms = ''
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
@@ -356,7 +342,7 @@ def get_gcode_issues():
             return issues
 
 
-def process_gcode_issues(existing_issues):
+def process_gcode_issues():
     """ Migrates all Google Code issues in the given dictionary to Github. """
 
     issues = get_gcode_issues()
@@ -377,17 +363,8 @@ def process_gcode_issues(existing_issues):
         if options.skip_closed and (issue['state'] == 'closed'):
             continue
 
-        # Add the issue and its comments to Github, if we haven't already
-        if issue['gid'] in existing_issues:
-            github_issue = existing_issues[issue['gid']]
-            output('Not adding issue %d (exists)' % issue['gid'])
-        else:
-            github_issue = add_issue_to_github(issue)
+        add_issue_to_github(issue)
 
-        if github_issue:
-            add_comments_to_issue(github_issue, issue)
-            if github_issue.state != issue['state']:
-                github_issue.edit(state = issue['state'])
         output('\n')
 
     if milestones:
@@ -395,21 +372,16 @@ def process_gcode_issues(existing_issues):
         print(json.dumps(milestones, indent=4, separators=(',', ': '), sort_keys=True))
 
         for m in milestones.values():
-            f = open('milestones/' + str(m['number']) + '.json', 'w')
-            f.write(json.dumps(m, indent=4, separators=(',', ': '), sort_keys=True))
-            f.write('\n')
-            f.close()
+            with open('milestones/' + str(m['number']) + '.json', 'w') as f:
+                f.write(json.dumps(m, indent=4, separators=(',', ': '), sort_keys=True))
+                f.write('\n')
 
 
 if __name__ == "__main__":
-    usage = "usage: %prog [options] <google project name> <github username> <github project>"
-    description = "Export all issues from a Google Code project to a Github project."
+    usage = "usage: %prog [options] <google project name>"
+    description = "Export all issues from a Google Code project for a Github project."
     parser = optparse.OptionParser(usage = usage, description = description)
 
-    parser.add_option("-a", "--assign-owner", action = "store_true", dest = "assign_owner",
-                      help = "Assign owned issues to the Github user", default = False)
-    parser.add_option("-d", "--dry-run", action = "store_true", dest = "dry_run",
-                      help = "Don't modify anything on Github", default = False)
     parser.add_option("-p", "--omit-priority", action = "store_true", dest = "omit_priority",
                       help = "Don't migrate priority labels", default = False)
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
@@ -432,12 +404,11 @@ if __name__ == "__main__":
         authors_cache = {}
 
     authors_cache_orig = authors_cache.copy()
-
-    label_cache = {} # Cache Github tags, to avoid unnecessary API requests
+    milestones = {}
+    mnum = 1
 
     try:
-        existing_issues = []
-        process_gcode_issues(existing_issues)
+        process_gcode_issues()
     except Exception:
         parser.print_help()
         raise
@@ -457,6 +428,6 @@ if __name__ == "__main__":
         if k not in authors_cache_orig.keys():
             print("NEW AUTHOR %s: %s" % (k, v))
 
-    f = open("authors.json-new", "w")
-    f.write(json.dumps(authors_cache, indent=4, separators=(',', ': '), sort_keys=True))
-    f.close()
+    with open("authors.json-new", "w") as f:
+        f.write(json.dumps(authors_cache, indent=4, separators=(',', ': '), sort_keys=True))
+        f.write('\n')
