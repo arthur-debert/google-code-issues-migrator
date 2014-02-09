@@ -19,6 +19,7 @@ import sys
 import urllib2
 
 from datetime import datetime
+from time import time
 
 from pyquery import PyQuery as pq
 
@@ -129,6 +130,7 @@ def add_issue_to_github(issue):
         except KeyError:
             pass
         del issue['link']
+        issue['updated_at'] = datetime.fromtimestamp(int(time())).isoformat() + "Z"
         f = open("issues/" + str(gid) + ".json", "w")
         f.write(json.dumps(issue, indent=4, separators=(',', ': '), sort_keys=True))
         f.write('\n')
@@ -180,10 +182,6 @@ def get_attachments(link, attachments):
 
 
 def get_gcode_issue(issue_summary):
-    def get_author(doc):
-        userlink = doc('.userlink')
-        return '[{}](https://code.google.com{})'.format(userlink.text(), userlink.attr('href'))
-
     # Populate properties available from the summary CSV
     issue = {
         'gid': int(issue_summary['ID']),
@@ -198,7 +196,7 @@ def get_gcode_issue(issue_summary):
     global mnum
     global milestones
 
-    ms = "backlog"
+    ms = ""
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
@@ -213,16 +211,18 @@ def get_gcode_issue(issue_summary):
             continue
         labels.append(LABEL_MAPPING.get(label, label))
 
-    try:
-        milestones[ms]
-    except KeyError:
-        milestones[ms] = {'number': mnum,
-                          'state': 'open',
-                          'creator': {'email': 'asmeurer@gmail.com'},
-                          'title': ms
-                          }
-        mnum+=1
-    issue['milestone'] = milestones[ms]['number']
+        if ms:
+            try:
+                milestones[ms]
+            except KeyError:
+                milestones[ms] = {'number': mnum,
+                                  'state': 'open',
+                                  'creator': {'email': 'skirpichev@gmail.com'},
+                                  'title': ms,
+                                  'created_at': issue['date']
+                                  }
+                mnum+=1
+            issue['milestone'] = milestones[ms]['number']
 
     # Add additional labels based on the issue's state
     if issue['status'] in STATE_MAPPING:
@@ -239,9 +239,10 @@ def get_gcode_issue(issue_summary):
     try:
         authors_cache[uid]
     except KeyError:
-        authors_cache[uid] = uid
+        authors_cache[uid] = ''
     user = authors_cache[uid]
-    issue['user'] = {'email': user}
+    if user:
+        issue['user'] = {'email': user}
 
     # Handle Owner and Cc fields...
 
@@ -255,9 +256,10 @@ def get_gcode_issue(issue_summary):
                     try:
                         authors_cache[oid]
                     except KeyError:
-                        authors_cache[oid] = oid
+                        authors_cache[oid] = ''
                     owner = authors_cache[oid]
-                    issue['owner'] = {'email': owner}
+                    if owner:
+                        issue['owner'] = {'email': owner}
                     break # only one owner
             break
 
@@ -273,9 +275,10 @@ def get_gcode_issue(issue_summary):
                     try:
                         authors_cache[cid]
                     except KeyError:
-                        authors_cache[cid] = cid
+                        authors_cache[cid] = ''
                     cc = authors_cache[cid]
-                    issue['Cc'].append({'email': cc})
+                    if cc:
+                        issue['Cc'].append({'email': cc})
             break
 
     issue['comments'] = []
@@ -310,15 +313,15 @@ def get_gcode_issue(issue_summary):
         try:
             body = dereferenceMention(comment('pre').text())
         except UnicodeDecodeError:
-            body = u'FIXME: unicode err'
-            print("unicode err", file=sys.stderr)
+            body = u'FIXME: UnicodeDecodeError'
 
         uid = 'https://code.google.com{}'.format(comment('.userlink').attr('href'))
         try:
             authors_cache[uid]
         except KeyError:
-            authors_cache[uid] = uid
-        user = authors_cache[uid]
+            authors_cache[uid] = ''
+        if user:
+            user = authors_cache[uid]
 
         updates = comment('.updates .box-inner')
         if updates:
@@ -327,10 +330,13 @@ def get_gcode_issue(issue_summary):
         try:
             body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'))
         except UnicodeDecodeError:
-            print("unicode err 2", file=sys.stderr)
+            body += u'FIXME: UnicodeDecodeError in updates'
 
         # Strip the placeholder text if there's any other updates
         body = body.replace('(No comment was entered for this change.)\n\n', '')
+
+        if body.find('**Status:** Fixed') >= 0:
+            issue['closed_at'] = date
 
         split_comment({'date': date, 'user': {'email': user}}, body)
 
@@ -442,7 +448,7 @@ if __name__ == "__main__":
         for v2, k2 in authors_cache.items():
             if v == v2:
                 continue
-            if k == k2:
+            if k and k == k2:
                 d[v] = k
                 d[v2] = k2
     if d:
