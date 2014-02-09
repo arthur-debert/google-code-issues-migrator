@@ -98,16 +98,27 @@ def add_issue_to_github(issue):
         del issue['owner']
     except KeyError:
         pass
-    del issue['link']
     updated_at = datetime.fromtimestamp(int(time())).isoformat() + "Z"
     issue['updated_at'] = updated_at
 
     markdown_date = gt('2009-04-20T19:00:00Z')
+    # markdown:
+    #    http://daringfireball.net/projects/markdown/syntax
+    #    http://github.github.com/github-flavored-markdown/
+    # vs textile:
+    #    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
 
     if gt(issue['created_at']) >= markdown_date:
-        issue['body'] = "'''\r\n" + issue['body'] + "\r\n'''\r\n"
+        issue['body'] = ("'''\r\n" + issue['body'] +
+                         "\r\n'''\r\n" +
+                         "_Original issue: " +
+                         issue['link'] + "_\r\n")
     else:
-        issue['body'] = "bc..\r\n" + issue['body'] + "\r\n"
+        issue['body'] = ("bc..\r\n" + issue['body'] + "\r\n" +
+                         "p. _Original issue: _" +
+                         '"_' + issue['link'] + '_":' +
+                         issue['link'] + "\r\n")
+    del issue['link']
 
     with open("issues/" + str(gid) + ".json", "w") as f:
         f.write(json.dumps(issue, indent=4, separators=(',', ': '), sort_keys=True))
