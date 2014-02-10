@@ -4,7 +4,6 @@
 # TODO:
 # * Metadata?  e.g. comments with "**Labels:** EasyToFix" only?
 # * add attachments for issue body?
-# * cross-references (e.g. blocked-on...)
 #
 
 from __future__ import print_function
