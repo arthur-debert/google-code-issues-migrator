@@ -74,6 +74,22 @@ def valid_email(s):
     return ''
 
 
+def get_gc_issue(s):
+    reg = [ r'^.*\*\*Blockedon:\*\* ([0-9]{1,4}) .*$',
+            r'^.*\*\*Blocking:\*\* ([0-9]{1,4}) .*$',
+            r'^.*\*\*Blocking:\*\* ' + google_project_name + r':([0-9]{1,4}) .*$',
+            r'^.*\*\*Blockedon:\*\* ' + google_project_name + r':([0-9]{1,4}) .*$', ]
+    n = []
+    for r in reg:
+        s1 = re.sub(r, r'\1', s, flags=re.DOTALL)
+        try:
+            i = int(s1)
+            n.append(i)
+        except ValueError:
+            pass
+    return n
+
+
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
@@ -111,16 +127,23 @@ def add_issue_to_github(issue):
     # vs textile:
     #    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
 
+    idx = get_gc_issue(issue['body'])
     if gt(issue['created_at']) >= markdown_date:
         issue['body'] = ("'''\r\n" + issue['body'] +
                          "\r\n'''\r\n" +
                          "_Original issue: " +
                          issue['link'] + "_\r\n")
+        if idx:
+            issue['body'] += ("_Referenced issues: " +
+                              ", ".join("#" + str(i) for i in idx) + "._\r\n")
     else:
         issue['body'] = ("bc.. " + issue['body'] + "\r\n" +
                          "p. _Original issue: _" +
                          '"_' + issue['link'] + '_":' +
                          issue['link'] + "\r\n")
+        if idx:
+            issue['body'] += ("p. _Referenced issues: " +
+                              ", ".join("#" + str(i) for i in idx) + "._\r\n")
     del issue['link']
 
     with open("issues/" + str(gid) + ".json", "w") as f:
@@ -133,10 +156,17 @@ def add_issue_to_github(issue):
             c['created_at'] = c['date']
             del c['date']
             c['updated_at'] = updated_at
+            idx = get_gc_issue(c['body'])
             if gt(c['created_at']) >= markdown_date:
                 c['body'] = "'''\r\n" + c['body'] + "\r\n'''\r\n"
+                if idx:
+                    c['body'] += ("_Referenced issues: " +
+                                  ", ".join("#" + str(i) for i in idx) + "._\r\n")
             else:
                 c['body'] = "bc.. " + c['body'] + "\r\n"
+                if idx:
+                    c['body'] += ("p. _Referenced issues: " +
+                                  ", ".join("#" + str(i) for i in idx) + "._\r\n")
 
         comments = comments_fixed
 
