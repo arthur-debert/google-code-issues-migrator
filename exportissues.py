@@ -1,18 +1,15 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 #
 # TODO:
-# * adopt https://gist.github.com/izuzak/654612901803d0d0bc3f
-# * deal with owner's
-# * milestones, labels
-# * old issues (before 2009-04-20 19:00:00 UTC) and markdown?
+# * Metadata?  e.g. comments with "**Labels:** EasyToFix" only?
+# * add attachments for issue body?
 #
 
 from __future__ import print_function
+
 import json
 import csv
-import getpass
-import logging
 import optparse
 import re
 import sys
@@ -20,10 +17,7 @@ import urllib2
 
 from datetime import datetime
 from time import time
-
 from pyquery import PyQuery as pq
-
-logging.basicConfig(level = logging.ERROR)
 
 # The maximum number of records to retrieve from Google Code in a single request
 
@@ -77,8 +71,6 @@ def add_issue_to_github(issue):
     # ensure that there are enough requests remaining before we start migrating an issue.
 
     output('Adding issue %d' % issue['gid'])
-
-    print(json.dumps(issue, indent=4, separators=(',', ': ')))
 
     gid = issue['gid']
     issue['number'] = gid
@@ -139,28 +131,6 @@ def add_issue_to_github(issue):
 
         f.write(json.dumps(comments, indent=4, separators=(',', ': '), sort_keys=True))
         f.write('\n')
-
-
-def add_comments_to_issue(github_issue, gcode_issue):
-    """ Migrates all comments from a Google Code issue to its Github copy. """
-
-    # Retrieve existing Github comments, to figure out which Google Code comments are new
-    existing_comments = [comment.body for comment in github_issue.get_comments()]
-
-    # Add any remaining comments to the Github issue
-    output(", adding comments")
-    for i, comment in enumerate(gcode_issue['comments']):
-        body = u'_From {user} on {date}_\n\n{body}'.format(**comment)
-        if body in existing_comments:
-            logging.info('Skipping comment %d: already present', i + 1)
-        else:
-            logging.info('Adding comment %d', i + 1)
-            if not options.dry_run:
-                github_issue.create_comment(body.encode('utf-8'))
-                output('.')
-            else:
-                print("comment:")
-                print(body)
 
 
 def get_attachments(link, attachments):
@@ -234,10 +204,10 @@ def get_gcode_issue(issue_summary):
     description = doc('.issuedescription .issuedescription')
     uid = 'https://code.google.com{}'.format(description('.userlink').attr('href'))
     try:
-        authors_cache[uid]
+        authors[uid]
     except KeyError:
-        authors_cache[uid] = ''
-    user = authors_cache[uid]
+        authors[uid] = ''
+    user = authors[uid]
     if user:
         issue['user'] = {'email': user}
 
@@ -251,10 +221,10 @@ def get_gcode_issue(issue_summary):
                 if owner:
                     oid = 'https://code.google.com{}'.format(owner)
                     try:
-                        authors_cache[oid]
+                        authors[oid]
                     except KeyError:
-                        authors_cache[oid] = ''
-                    owner = authors_cache[oid]
+                        authors[oid] = ''
+                    owner = authors[oid]
                     if owner:
                         issue['owner'] = {'email': owner}
                     break # only one owner
@@ -270,10 +240,10 @@ def get_gcode_issue(issue_summary):
                 if cc:
                     cid = 'https://code.google.com{}'.format(cc)
                     try:
-                        authors_cache[cid]
+                        authors[cid]
                     except KeyError:
-                        authors_cache[cid] = ''
-                    cc = authors_cache[cid]
+                        authors[cid] = ''
+                    cc = authors[cid]
                     if cc:
                         issue['Cc'].append({'email': cc})
             break
@@ -296,11 +266,11 @@ def get_gcode_issue(issue_summary):
 
         uid = 'https://code.google.com{}'.format(comment('.userlink').attr('href'))
         try:
-            authors_cache[uid]
+            authors[uid]
         except KeyError:
-            authors_cache[uid] = ''
+            authors[uid] = ''
         if user:
-            user = authors_cache[uid]
+            user = authors[uid]
 
         updates = comment('.updates .box-inner')
         if updates:
@@ -362,9 +332,6 @@ def process_gcode_issues():
         output('\n')
 
     if milestones:
-        print("Milestones:")
-        print(json.dumps(milestones, indent=4, separators=(',', ': '), sort_keys=True))
-
         for m in milestones.values():
             with open('milestones/' + str(m['number']) + '.json', 'w') as f:
                 f.write(json.dumps(m, indent=4, separators=(',', ': '), sort_keys=True))
@@ -391,13 +358,12 @@ if __name__ == "__main__":
     google_project_name = args[0]
 
     try:
-        f = open("authors.json", "r")
-        authors_cache = json.load(f)
-        f.close()
+        with open("authors.json", "r") as f:
+            authors = json.load(f)
     except IOError:
-        authors_cache = {}
+        authors = {}
 
-    authors_cache_orig = authors_cache.copy()
+    authors_orig = authors.copy()
     milestones = {}
     mnum = 1
 
@@ -407,21 +373,12 @@ if __name__ == "__main__":
         parser.print_help()
         raise
 
-    d = {}
-    for v, k in authors_cache.items():
-        for v2, k2 in authors_cache.items():
-            if v == v2:
-                continue
-            if k and k == k2:
-                d[v] = k
-                d[v2] = k2
-    if d:
-        print("XXX: duplicates in authors_cache, d = %s" % json.dumps(d, indent=4, separators=(',', ': ')))
+    for k, v in authors.items():
+        if k not in authors_orig.keys():
+            output('NEW AUTHOR %s: %s\n' % (k, v))
 
-    for k, v in authors_cache.items():
-        if k not in authors_cache_orig.keys():
-            print("NEW AUTHOR %s: %s" % (k, v))
-
-    with open("authors.json-new", "w") as f:
-        f.write(json.dumps(authors_cache, indent=4, separators=(',', ': '), sort_keys=True))
-        f.write('\n')
+    if authors != authors_orig:
+        with open("authors.json-new", "w") as f:
+            f.write(json.dumps(authors, indent=4,
+                               separators=(',', ': '), sort_keys=True))
+            f.write('\n')
