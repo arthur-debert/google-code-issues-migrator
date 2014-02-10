@@ -4,6 +4,7 @@
 # TODO:
 # * Metadata?  e.g. comments with "**Labels:** EasyToFix" only?
 # * add attachments for issue body?
+# * cross-references (e.g. blocked-on...)
 #
 
 from __future__ import print_function
@@ -61,6 +62,16 @@ def parse_gcode_date(date_text):
 
 def gt(dt_str):
     return datetime.strptime(dt_str.rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
+
+
+def valid_email(s):
+    email = re.sub(r'^https:\/\/code\.google\.com\/u\/([^/]+)\/$', r'\1', s)
+    try:
+        int(email)
+    except ValueError:
+        if re.match(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4}$', email):
+            return email
+    return ''
 
 
 def add_issue_to_github(issue):
@@ -206,7 +217,7 @@ def get_gcode_issue(issue_summary):
     try:
         authors[uid]
     except KeyError:
-        authors[uid] = ''
+        authors[uid] = valid_email(uid)
     user = authors[uid]
     if user:
         issue['user'] = {'email': user}
@@ -223,7 +234,7 @@ def get_gcode_issue(issue_summary):
                     try:
                         authors[oid]
                     except KeyError:
-                        authors[oid] = ''
+                        authors[oid] = valid_email(oid)
                     owner = authors[oid]
                     if owner:
                         issue['owner'] = {'email': owner}
@@ -242,7 +253,7 @@ def get_gcode_issue(issue_summary):
                     try:
                         authors[cid]
                     except KeyError:
-                        authors[cid] = ''
+                        authors[cid] = valid_email(cid)
                     cc = authors[cid]
                     if cc:
                         issue['Cc'].append({'email': cc})
@@ -268,7 +279,7 @@ def get_gcode_issue(issue_summary):
         try:
             authors[uid]
         except KeyError:
-            authors[uid] = ''
+            authors[uid] = valid_email(uid)
         if user:
             user = authors[uid]
 
