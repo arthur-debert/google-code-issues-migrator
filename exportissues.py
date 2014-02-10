@@ -243,7 +243,11 @@ def get_gcode_issue(issue_summary):
     doc = pq(opener.open(issue['link']).read())
 
     description = doc('.issuedescription .issuedescription')
-    uid = 'https://code.google.com{}'.format(description('.userlink').attr('href'))
+    tmp = description('.userlink').attr('href')
+    if tmp:
+        uid = 'https://code.google.com{}'.format(tmp)
+    else:
+        uid = description('.userlink').contents()[0]
     try:
         authors[uid]
     except KeyError:
@@ -258,9 +262,12 @@ def get_gcode_issue(issue_summary):
         if pq(tr)('th').filter(lambda i, this: pq(this).text() == 'Owner:'):
             tmp = pq(tr)('.userlink')
             for owner in tmp:
-                owner = pq(owner).attr('href')
-                if owner:
-                    oid = 'https://code.google.com{}'.format(owner)
+                tmp = pq(owner).attr('href')
+                if tmp:
+                    oid = 'https://code.google.com{}'.format(tmp)
+                else:
+                    oid = pq(owner).contents()[0]
+                if oid:
                     try:
                         authors[oid]
                     except KeyError:
@@ -277,9 +284,12 @@ def get_gcode_issue(issue_summary):
             if tmp:
                 issue['Cc'] = []
             for cc in tmp:
-                cc = pq(cc).attr('href')
-                if cc:
-                    cid = 'https://code.google.com{}'.format(cc)
+                tmp = pq(cc).attr('href')
+                if tmp:
+                    cid = 'https://code.google.com{}'.format(tmp)
+                else:
+                    cid = pq(cc).contents()[0]
+                if cid:
                     try:
                         authors[cid]
                     except KeyError:
@@ -305,7 +315,11 @@ def get_gcode_issue(issue_summary):
         except UnicodeDecodeError:
             body = u'FIXME: UnicodeDecodeError'
 
-        uid = 'https://code.google.com{}'.format(comment('.userlink').attr('href'))
+        tmp = comment('.userlink').attr('href')
+        if tmp:
+            uid = 'https://code.google.com{}'.format(tmp)
+        else:
+            uid = comment('.userlink').contents()[0]
         try:
             authors[uid]
         except KeyError:
