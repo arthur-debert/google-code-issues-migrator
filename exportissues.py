@@ -12,6 +12,7 @@ import json
 import csv
 import optparse
 import re
+import os
 import sys
 import urllib2
 
@@ -78,14 +79,17 @@ def get_gc_issue(s):
             r'^.*\*\*Blocking:\*\* ([0-9]{1,4}) .*$',
             r'^.*\*\*Blocking:\*\* ' + google_project_name + r':([0-9]{1,4}) .*$',
             r'^.*\*\*Blockedon:\*\* ' + google_project_name + r':([0-9]{1,4}) .*$', ]
-    n = []
+    n = set()
     for r in reg:
         s1 = re.sub(r, r'\1', s, flags=re.DOTALL)
         try:
             i = int(s1)
-            n.append(i)
+            n.add(i)
         except ValueError:
             pass
+    for i in set(re.findall(r'issue [0-9]+', s, re.DOTALL)):
+        s1 = re.sub(r'issue ([0-9]+)', r'\1', i)
+        n.add(int(s1))
     return n
 
 
@@ -420,6 +424,12 @@ if __name__ == "__main__":
     authors_orig = authors.copy()
     milestones = {}
     mnum = 1
+
+    if not os.path.exists('issues'):
+        os.mkdir('issues')
+
+    if not os.path.exists('milestones'):
+        os.mkdir('milestones')
 
     try:
         process_gcode_issues()
