@@ -131,22 +131,38 @@ def add_issue_to_github(issue):
     #    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
 
     idx = get_gc_issue(issue['body'])
+
+    try:
+        oid = issue['orig_owner']
+        del issue['orig_owner']
+    except KeyError:
+        oid = None
+
     if gt(issue['created_at']) >= markdown_date:
         issue['body'] = ("'''\r\n" + issue['body'] +
                          "\r\n'''\r\n" +
                          "_Original issue for #" + issue['gid'] + ": "
-                         issue['link'] + "_\r\n")
+                         issue['link'] + "_\r\n" +
+                         "_Original author: " + issue['orig_user'] + "_\r\n")
         if idx:
             issue['body'] += ("_Referenced issues: " +
                               ", ".join("#" + str(i) for i in idx) + "._\r\n")
+        if oid:
+            issue['body'] += ("_Original owner: " + oid + "_\r\n")
     else:
         issue['body'] = ("bc.. " + issue['body'] + "\r\n" +
                          "p. _Original issue for #" + issue['gid'] + ": _" +
                          '"_' + issue['link'] + '_":' +
-                         issue['link'] + "\r\n")
+                         issue['link'] + "\r\n" +
+                         "p. _Original author: _" + '"_' + issue['orig_user'] +
+                         '_":' + issue['orig_user'] + "\r\n")
         if idx:
             issue['body'] += ("p. _Referenced issues: " +
                               ", ".join("#" + str(i) for i in idx) + "._\r\n")
+        if oid:
+            issue['body'] += ("p. _Original author: _" +
+                              '"_' + oid + '_":' + oid + "\r\n")
+    del issue['orig_user']
     del issue['link']
 
     with open("issues/" + str(gid) + ".json", "w") as f:
@@ -166,6 +182,7 @@ def add_issue_to_github(issue):
                     c['body'] += ("_Referenced issues: " +
                                   ", ".join("#" + str(i) for i in idx) + "._\r\n")
                     c['body'] += ("_Original comment: " + c['link'] + "_\r\n")
+                    c['body'] += ("_Original author: " + c['orig_user'] + "_\r\n")
             else:
                 c['body'] = "bc.. " + c['body'] + "\r\n"
                 if idx:
@@ -173,7 +190,10 @@ def add_issue_to_github(issue):
                                   ", ".join("#" + str(i) for i in idx) + "._\r\n")
                     c['body'] += ("p. _Original comment: _" + '"_' + c['link'] +
                                   '_":' + c['link'] + "\r\n")
+                    c['body'] += ("p. _Original author: _" + '"_' + c['orig_user'] +
+                                  '_":' + c['orig_user'] + "\r\n")
             del c['link']
+            del c['orig_user']
 
         comments = comments_fixed
 
@@ -262,6 +282,7 @@ def get_gcode_issue(issue_summary):
     user = authors[uid]
     if user:
         issue['user'] = {'email': user}
+    issue['orig_user'] = uid
 
     # Handle Owner and Cc fields...
 
@@ -282,6 +303,7 @@ def get_gcode_issue(issue_summary):
                     owner = authors[oid]
                     if owner:
                         issue['owner'] = {'email': owner}
+                    issue['orig_owner'] = oid
                     break # only one owner
             break
 
@@ -338,10 +360,11 @@ def get_gcode_issue(issue_summary):
         if updates:
             body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
 
-        try:
-            body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'))
-        except UnicodeDecodeError:
-            body += u'FIXME: UnicodeDecodeError in updates'
+#       # TODO: support attachments
+#       try:
+#           body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'))
+#       except UnicodeDecodeError:
+#           body += u'FIXME: UnicodeDecodeError in updates'
 
         # Strip the placeholder text if there's any other updates
         body = body.replace('(No comment was entered for this change.)\n\n', '')
@@ -352,7 +375,8 @@ def get_gcode_issue(issue_summary):
         c = { 'date': date,
               'user': {'email': user},
               'body': body,
-              'link': issue['link'] + '#c' + str(len(issue['comments']) + 1)
+              'link': issue['link'] + '#c' + str(len(issue['comments']) + 1),
+              'orig_user': uid
             }
         issue['comments'].append(c)
 
