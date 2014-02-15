@@ -165,11 +165,15 @@ def add_issue_to_github(issue):
                 if idx:
                     c['body'] += ("_Referenced issues: " +
                                   ", ".join("#" + str(i) for i in idx) + "._\r\n")
+                    c['body'] += ("_Original comment: " + c['link'] + "_\r\n")
             else:
                 c['body'] = "bc.. " + c['body'] + "\r\n"
                 if idx:
                     c['body'] += ("p. _Referenced issues: " +
                                   ", ".join("#" + str(i) for i in idx) + "._\r\n")
+                    c['body'] += ("p. _Original comment: _" + '"_' + c['link'] +
+                                  '_":' + c['link'] + "\r\n")
+            del c['link']
 
         comments = comments_fixed
 
@@ -345,7 +349,12 @@ def get_gcode_issue(issue_summary):
         if body.find('**Status:** Fixed') >= 0:
             issue['closed_at'] = date
 
-        issue['comments'].append({'date': date, 'user': {'email': user}, 'body': body})
+        c = { 'date': date,
+              'user': {'email': user},
+              'body': body,
+              'link': issue['link'] + '#c' + str(len(issue['comments']) + 1)
+            }
+        issue['comments'].append(c)
 
     return issue
 
