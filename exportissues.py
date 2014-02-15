@@ -141,7 +141,7 @@ def add_issue_to_github(issue):
     if gt(issue['created_at']) >= markdown_date:
         issue['body'] = ("'''\r\n" + issue['body'] +
                          "\r\n'''\r\n" +
-                         "_Original issue for #" + issue['gid'] + ": "
+                         "_Original issue for #" + str(gid) + ": " +
                          issue['link'] + "_\r\n" +
                          "_Original author: " + issue['orig_user'] + "_\r\n")
         if idx:
@@ -151,7 +151,7 @@ def add_issue_to_github(issue):
             issue['body'] += ("_Original owner: " + oid + "_\r\n")
     else:
         issue['body'] = ("bc.. " + issue['body'] + "\r\n" +
-                         "p. _Original issue for #" + issue['gid'] + ": _" +
+                         "p. _Original issue for #" + str(gid) + ": _" +
                          '"_' + issue['link'] + '_":' +
                          issue['link'] + "\r\n" +
                          "p. _Original author: _" + '"_' + issue['orig_user'] +
