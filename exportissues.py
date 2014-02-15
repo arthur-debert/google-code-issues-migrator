@@ -134,14 +134,14 @@ def add_issue_to_github(issue):
     if gt(issue['created_at']) >= markdown_date:
         issue['body'] = ("'''\r\n" + issue['body'] +
                          "\r\n'''\r\n" +
-                         "_Original issue: " +
+                         "_Original issue for #" + issue['gid'] + ": "
                          issue['link'] + "_\r\n")
         if idx:
             issue['body'] += ("_Referenced issues: " +
                               ", ".join("#" + str(i) for i in idx) + "._\r\n")
     else:
         issue['body'] = ("bc.. " + issue['body'] + "\r\n" +
-                         "p. _Original issue: _" +
+                         "p. _Original issue for #" + issue['gid'] + ": _" +
                          '"_' + issue['link'] + '_":' +
                          issue['link'] + "\r\n")
         if idx:
