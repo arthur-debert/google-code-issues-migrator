@@ -103,8 +103,16 @@ def add_issue_to_github(issue):
     output('Adding issue %d' % issue['gid'])
 
     gid = issue['gid']
+    gid += (options.issues_start_from - 1)
     issue['number'] = gid
     del issue['gid']
+    try:
+        issue['milestone'] += (options.milestones_start_from - 1)
+    except KeyError:
+        pass
+    issue['title'] = issue['title'].strip()
+    if not issue['title']:
+        issue['title'] = "FIXME: empty title"
     comments = issue['comments']
     del issue['comments']
     issue['created_at'] = issue['date']
@@ -160,16 +168,16 @@ def add_issue_to_github(issue):
             issue['body'] += ("\r\np. _Referenced issues: " +
                               ", ".join("#" + str(i) for i in idx) + "._\r\n")
         if oid:
-            issue['body'] += ("\r\np. _Original author: _" +
+            issue['body'] += ("\r\np. _Original owner:_ " +
                               '"_' + oid + '_":' + oid + "\r\n")
     del issue['orig_user']
     del issue['link']
 
-    with open("issues/" + str(gid) + ".json", "w") as f:
+    with open("issues/" + str(issue['number']) + ".json", "w") as f:
         f.write(json.dumps(issue, indent=4, separators=(',', ': '), sort_keys=True))
         f.write('\n')
 
-    with open("issues/" + str(gid) + ".comments.json", "w") as f:
+    with open("issues/" + str(issue['number']) + ".comments.json", "w") as f:
         comments_fixed = list(comments)
         for c in comments:
             c['created_at'] = c['date']
@@ -424,6 +432,7 @@ def process_gcode_issues():
 
     if milestones:
         for m in milestones.values():
+            m['number'] += (options.milestones_start_from - 1)
             with open('milestones/' + str(m['number']) + '.json', 'w') as f:
                 f.write(json.dumps(m, indent=4, separators=(',', ': '), sort_keys=True))
                 f.write('\n')
@@ -439,6 +448,8 @@ if __name__ == "__main__":
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
     parser.add_option('--end-at', dest = 'end_at', help = 'End at the given Google Code issue number', default = None, type = int)
+    parser.add_option('--issues-start-from', dest = 'issues_start_from', help = 'First issue number', default = 1, type = int)
+    parser.add_option('--milestones-start-from', dest = 'milestones_start_from', help = 'First milestone number', default = 1, type = int)
 
     options, args = parser.parse_args()
 
