@@ -139,8 +139,8 @@ def add_issue_to_github(issue):
         oid = None
 
     if gt(issue['created_at']) >= markdown_date:
-        issue['body'] = ("'''\r\n" + issue['body'] +
-                         "\r\n'''\r\n" +
+        issue['body'] = ("```\r\n" + issue['body'] +
+                         "\r\n```\r\n" +
                          "_Original issue for #" + str(gid) + ": " +
                          issue['link'] + "_\r\n" +
                          "_Original author: " + issue['orig_user'] + "_\r\n")
@@ -150,17 +150,17 @@ def add_issue_to_github(issue):
         if oid:
             issue['body'] += ("_Original owner: " + oid + "_\r\n")
     else:
-        issue['body'] = ("bc.. " + issue['body'] + "\r\n" +
-                         "p. _Original issue for #" + str(gid) + ": _" +
+        issue['body'] = ("bc.. " + issue['body'] + "\r\n\r\n" +
+                         "p. _Original issue for #" + str(gid) + ":_ " +
                          '"_' + issue['link'] + '_":' +
-                         issue['link'] + "\r\n" +
-                         "p. _Original author: _" + '"_' + issue['orig_user'] +
+                         issue['link'] + "\r\n\r\n" +
+                         "p. _Original author:_ " + '"_' + issue['orig_user'] +
                          '_":' + issue['orig_user'] + "\r\n")
         if idx:
-            issue['body'] += ("p. _Referenced issues: " +
+            issue['body'] += ("\r\np. _Referenced issues: " +
                               ", ".join("#" + str(i) for i in idx) + "._\r\n")
         if oid:
-            issue['body'] += ("p. _Original author: _" +
+            issue['body'] += ("\r\np. _Original author: _" +
                               '"_' + oid + '_":' + oid + "\r\n")
     del issue['orig_user']
     del issue['link']
@@ -177,21 +177,21 @@ def add_issue_to_github(issue):
             c['updated_at'] = updated_at
             idx = get_gc_issue(c['body'])
             if gt(c['created_at']) >= markdown_date:
-                c['body'] = "'''\r\n" + c['body'] + "\r\n'''\r\n"
+                c['body'] = "```\r\n" + c['body'] + "\r\n```\r\n"
                 if idx:
                     c['body'] += ("_Referenced issues: " +
                                   ", ".join("#" + str(i) for i in idx) + "._\r\n")
-                    c['body'] += ("_Original comment: " + c['link'] + "_\r\n")
-                    c['body'] += ("_Original author: " + c['orig_user'] + "_\r\n")
+                c['body'] += ("_Original comment: " + c['link'] + "_\r\n")
+                c['body'] += ("_Original author: " + c['orig_user'] + "_\r\n")
             else:
                 c['body'] = "bc.. " + c['body'] + "\r\n"
                 if idx:
-                    c['body'] += ("p. _Referenced issues: " +
+                    c['body'] += ("\r\np. _Referenced issues: " +
                                   ", ".join("#" + str(i) for i in idx) + "._\r\n")
-                    c['body'] += ("p. _Original comment: _" + '"_' + c['link'] +
-                                  '_":' + c['link'] + "\r\n")
-                    c['body'] += ("p. _Original author: _" + '"_' + c['orig_user'] +
-                                  '_":' + c['orig_user'] + "\r\n")
+                c['body'] += ("\r\np. _Original comment:_ " + '"_' + c['link'] +
+                              '_":' + c['link'] + "\r\n")
+                c['body'] += ("\r\np. _Original author:_ " + '"_' + c['orig_user'] +
+                              '_":' + c['orig_user'] + "\r\n")
             del c['link']
             del c['orig_user']
 
