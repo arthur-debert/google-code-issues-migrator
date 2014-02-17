@@ -145,6 +145,14 @@ def add_issue_to_github(issue):
         issue['body'] = "FIXME: too long issue body"
         output("FIXME: issue %d - too long body" % gid)
 
+    body = ""
+    for i in issue['body']:
+        if i >= u"\uffff":
+            body += "FIXME: unicode %s" % hex(ord(i))
+        else:
+            body += i
+    issue['body'] = body
+
     try:
         oid = issue['orig_owner']
         del issue['orig_owner']
@@ -189,6 +197,14 @@ def add_issue_to_github(issue):
             del c['date']
             c['updated_at'] = updated_at
             idx = get_gc_issue(c['body'])
+
+            body = ""
+            for i in c['body']:
+                if i >= u"\uffff":
+                    body += "FIXME: unicode %s" % hex(ord(i))
+                else:
+                    body += i
+            c['body'] = body
 
             if len(c['body']) >= 65534:
                 c['body'] = "FIXME: too long comment body"
