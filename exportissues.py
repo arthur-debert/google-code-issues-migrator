@@ -100,10 +100,11 @@ def add_issue_to_github(issue):
     # through adding an issue it could end up in an incomplete state.  To avoid this we'll
     # ensure that there are enough requests remaining before we start migrating an issue.
 
-    output('Adding issue %d' % issue['gid'])
-
     gid = issue['gid']
     gid += (options.issues_start_from - 1)
+
+    output('Adding issue %d' % gid)
+
     issue['number'] = gid
     del issue['gid']
     try:
@@ -139,6 +140,10 @@ def add_issue_to_github(issue):
     #    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
 
     idx = get_gc_issue(issue['body'])
+
+    if len(issue['body']) >= 65534:
+        issue['body'] = "FIXME: too long issue body"
+        output("FIXME: issue %d - too long body" % gid)
 
     try:
         oid = issue['orig_owner']
@@ -179,11 +184,16 @@ def add_issue_to_github(issue):
 
     with open("issues/" + str(issue['number']) + ".comments.json", "w") as f:
         comments_fixed = list(comments)
-        for c in comments:
+        for i, c in enumerate(comments):
             c['created_at'] = c['date']
             del c['date']
             c['updated_at'] = updated_at
             idx = get_gc_issue(c['body'])
+
+            if len(c['body']) >= 65534:
+                c['body'] = "FIXME: too long comment body"
+                output("FIXME: issue %d, comment %d - too long body" % (gid, i + 1))
+
             if gt(c['created_at']) >= markdown_date:
                 c['body'] = "```\r\n" + c['body'] + "\r\n```\r\n"
                 if idx:
