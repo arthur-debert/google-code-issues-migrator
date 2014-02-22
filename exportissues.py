@@ -2,7 +2,7 @@
 
 #
 # TODO:
-# * Metadata?  e.g. comments with "**Labels:** EasyToFix" only?
+# * code cleanup
 # * add attachments for issue body?
 #
 
@@ -140,6 +140,8 @@ def add_issue_to_github(issue):
     #    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
 
     idx = get_gc_issue(issue['body'])
+    if idx:
+        idx = [i + (options.issues_start_from - 1) for i in idx]
 
     if len(issue['body']) >= 65534:
         issue['body'] = "FIXME: too long issue body"
