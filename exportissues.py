@@ -146,7 +146,7 @@ def add_issue_to_github(issue):
 
     if len(issue['body']) >= 65534:
         issue['body'] = "FIXME: too long issue body"
-        output(" FIXME: too long body" % gid)
+        output(" FIXME: too long body")
 
     body = ""
     for i in issue['body']:
@@ -213,7 +213,7 @@ def add_issue_to_github(issue):
 
             if len(c['body']) >= 65534:
                 c['body'] = "FIXME: too long comment body"
-                output(" FIXME: comment %d - too long body" % (gid, i + 1))
+                output(" FIXME: comment %d - too long body" % i + 1)
 
             if gt(c['created_at']) >= markdown_date:
                 c['body'] = "```\r\n" + c['body'] + "\r\n```\r\n"
@@ -382,7 +382,7 @@ def get_gcode_issue(issue_summary):
             body = comment('pre').text()
         except UnicodeDecodeError:
             body = u'FIXME: UnicodeDecodeError'
-            output("issue %d FIXME: UnicodeDecodeError\n" % issue['gid'] + (options.issues_start_from - 1))
+            output("issue %d FIXME: UnicodeDecodeError\n" % (issue['gid'] + (options.issues_start_from - 1)))
 
         tmp = comment('.userlink').attr('href')
         if tmp:
