@@ -114,6 +114,7 @@ def add_issue_to_github(issue):
     issue['title'] = issue['title'].strip()
     if not issue['title']:
         issue['title'] = "FIXME: empty title"
+        output(" FIXME: empty title")
     comments = issue['comments']
     del issue['comments']
     issue['created_at'] = issue['date']
@@ -145,12 +146,13 @@ def add_issue_to_github(issue):
 
     if len(issue['body']) >= 65534:
         issue['body'] = "FIXME: too long issue body"
-        output("FIXME: issue %d - too long body" % gid)
+        output(" FIXME: too long body" % gid)
 
     body = ""
     for i in issue['body']:
         if i >= u"\uffff":
             body += "FIXME: unicode %s" % hex(ord(i))
+            output(" FIXME: unicode %s" % hex(ord(i)))
         else:
             body += i
     issue['body'] = body
@@ -204,13 +206,14 @@ def add_issue_to_github(issue):
             for i in c['body']:
                 if i >= u"\uffff":
                     body += "FIXME: unicode %s" % hex(ord(i))
+                    output(" FIXME: unicode %s" % hex(ord(i)))
                 else:
                     body += i
             c['body'] = body
 
             if len(c['body']) >= 65534:
                 c['body'] = "FIXME: too long comment body"
-                output("FIXME: issue %d, comment %d - too long body" % (gid, i + 1))
+                output(" FIXME: comment %d - too long body" % (gid, i + 1))
 
             if gt(c['created_at']) >= markdown_date:
                 c['body'] = "```\r\n" + c['body'] + "\r\n```\r\n"
@@ -379,6 +382,7 @@ def get_gcode_issue(issue_summary):
             body = comment('pre').text()
         except UnicodeDecodeError:
             body = u'FIXME: UnicodeDecodeError'
+            output("issue %d FIXME: UnicodeDecodeError\n" % issue['gid'] + (options.issues_start_from - 1))
 
         tmp = comment('.userlink').attr('href')
         if tmp:
@@ -395,12 +399,6 @@ def get_gcode_issue(issue_summary):
         updates = comment('.updates .box-inner')
         if updates:
             body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
-
-#       # TODO: support attachments
-#       try:
-#           body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'))
-#       except UnicodeDecodeError:
-#           body += u'FIXME: UnicodeDecodeError in updates'
 
         # Strip the placeholder text if there's any other updates
         body = body.replace('(No comment was entered for this change.)\n\n', '')
@@ -511,7 +509,7 @@ if __name__ == "__main__":
 
     for k, v in authors.items():
         if k not in authors_orig.keys():
-            output('NEW AUTHOR %s: %s\n' % (k, v))
+            output('FIXME: NEW AUTHOR %s: %s\n' % (k, v))
 
     if authors != authors_orig:
         with open("authors.json-new", "w") as f:
