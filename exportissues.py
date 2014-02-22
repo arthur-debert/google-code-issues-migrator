@@ -460,8 +460,10 @@ def process_gcode_issues():
         for m in milestones.values():
             m['number'] += (options.milestones_start_from - 1)
             with open('milestones/' + str(m['number']) + '.json', 'w') as f:
+                output('Adding milestone %d' % m['number'])
                 f.write(json.dumps(m, indent=4, separators=(',', ': '), sort_keys=True))
                 f.write('\n')
+                output('\n')
 
 
 if __name__ == "__main__":
