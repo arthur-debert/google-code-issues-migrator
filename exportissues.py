@@ -81,7 +81,10 @@ def get_gc_issue(s):
             r'^.*\*\*Blockedon:\*\* ' + google_project_name + r':([0-9]{1,4}) .*$', ]
     n = set()
     for r in reg:
-        s1 = re.sub(r, r'\1', s, flags=re.DOTALL)
+        if re.match(r, s):
+            s1 = re.sub(r, r'\1', s, flags=re.DOTALL)
+        else:
+            continue
         try:
             i = int(s1)
             n.add(i)
@@ -395,10 +398,15 @@ def get_gcode_issue(issue_summary):
         if body.find('**Status:** Fixed') >= 0:
             issue['closed_at'] = date
 
+        if re.match(r'^c([0-9]+)$', pq(comment)('a').attr('name')):
+            i = re.sub(r'^c([0-9]+)$', r'\1', pq(comment)('a').attr('name'), flags=re.DOTALL)
+        else:
+            i = str(len(issue['comments']) + 1)
+
         c = { 'date': date,
               'user': {'email': user},
               'body': body,
-              'link': issue['link'] + '#c' + str(len(issue['comments']) + 1),
+              'link': issue['link'] + '#c' + i),
               'orig_user': uid
             }
         issue['comments'].append(c)
