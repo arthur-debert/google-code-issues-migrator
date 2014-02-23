@@ -406,7 +406,7 @@ def get_gcode_issue(issue_summary):
         c = { 'date': date,
               'user': {'email': user},
               'body': body,
-              'link': issue['link'] + '#c' + i),
+              'link': issue['link'] + '#c' + str(i),
               'orig_user': uid
             }
         issue['comments'].append(c)
