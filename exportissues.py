@@ -179,7 +179,8 @@ def add_issue_to_github(issue):
             issue['body'] += ("Original owner: " + oid + "\r\n")
     else:
         issue['body'] = ("bc.. " + issue['body'] + "\r\n\r\n" +
-                         "p. Original issue for " + (i_tmpl.format(*[str(gid)]*2)) + ": " +
+                         "p. Original issue for " +
+                         i_tmpl.format(*[str(gid)]*2) + ": " +
                          '"' + issue['link'] + '":' +
                          issue['link'] + "\r\n\r\n" +
                          "p. Original author: " + '"' + issue['orig_user'] +
