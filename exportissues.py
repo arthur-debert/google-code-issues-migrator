@@ -163,30 +163,34 @@ def add_issue_to_github(issue):
     except KeyError:
         oid = None
 
+    i_tmpl = '"#{}"'
+    if options.issues_link:
+        i_tmpl = '"#{}":' + options.issues_link + '/{}'
+
     if gt(issue['created_at']) >= markdown_date:
-        issue['body'] = ("```\r\n" + issue['body'] +
-                         "\r\n```\r\n" +
-                         "_Original issue for #" + str(gid) + ": " +
-                         issue['link'] + "_\r\n" +
-                         "_Original author: " + issue['orig_user'] + "_\r\n")
+        issue['body'] = ("```\r\n" + issue['body'] + "\r\n```\r\n" +
+                         "Original issue for #" + str(gid) + ": " +
+                         issue['link'] + "\r\n" +
+                         "Original author: " + issue['orig_user'] + "\r\n")
         if idx:
-            issue['body'] += ("_Referenced issues: " +
-                              ", ".join("#" + str(i) for i in idx) + "._\r\n")
+            issue['body'] += ("Referenced issues: " +
+                              ", ".join("#" + str(i) for i in idx) + "\r\n")
         if oid:
-            issue['body'] += ("_Original owner: " + oid + "_\r\n")
+            issue['body'] += ("Original owner: " + oid + "\r\n")
     else:
         issue['body'] = ("bc.. " + issue['body'] + "\r\n\r\n" +
-                         "p. _Original issue for #" + str(gid) + ":_ " +
-                         '"_' + issue['link'] + '_":' +
+                         "p. Original issue for " + (i_tmpl.format(*[str(gid)]*2)) + ": " +
+                         '"' + issue['link'] + '":' +
                          issue['link'] + "\r\n\r\n" +
-                         "p. _Original author:_ " + '"_' + issue['orig_user'] +
-                         '_":' + issue['orig_user'] + "\r\n")
+                         "p. Original author: " + '"' + issue['orig_user'] +
+                         '":' + issue['orig_user'] + "\r\n")
         if idx:
-            issue['body'] += ("\r\np. _Referenced issues: " +
-                              ", ".join("#" + str(i) for i in idx) + "._\r\n")
+            issue['body'] += ("\r\np. Referenced issues: " +
+                              ", ".join(i_tmpl.format(*[str(i)]*2) for i in idx) +
+                              "\r\n")
         if oid:
-            issue['body'] += ("\r\np. _Original owner:_ " +
-                              '"_' + oid + '_":' + oid + "\r\n")
+            issue['body'] += ("\r\np. Original owner: " +
+                              '"' + oid + '":' + oid + "\r\n")
     del issue['orig_user']
     del issue['link']
 
@@ -218,19 +222,19 @@ def add_issue_to_github(issue):
             if gt(c['created_at']) >= markdown_date:
                 c['body'] = "```\r\n" + c['body'] + "\r\n```\r\n"
                 if idx:
-                    c['body'] += ("_Referenced issues: " +
-                                  ", ".join("#" + str(i) for i in idx) + "._\r\n")
-                c['body'] += ("_Original comment: " + c['link'] + "_\r\n")
-                c['body'] += ("_Original author: " + c['orig_user'] + "_\r\n")
+                    c['body'] += ("Referenced issues: " +
+                                  ", ".join("#" + str(i) for i in idx) + "\r\n")
+                c['body'] += ("Original comment: " + c['link'] + "\r\n")
+                c['body'] += ("Original author: " + c['orig_user'] + "\r\n")
             else:
                 c['body'] = "bc.. " + c['body'] + "\r\n"
                 if idx:
-                    c['body'] += ("\r\np. _Referenced issues: " +
-                                  ", ".join("#" + str(i) for i in idx) + "._\r\n")
-                c['body'] += ("\r\np. _Original comment:_ " + '"_' + c['link'] +
-                              '_":' + c['link'] + "\r\n")
-                c['body'] += ("\r\np. _Original author:_ " + '"_' + c['orig_user'] +
-                              '_":' + c['orig_user'] + "\r\n")
+                    c['body'] += ("\r\np. Referenced issues: " +
+                                  ", ".join(i_tmpl.format(*[str(i)]*2) for i in idx) + "\r\n")
+                c['body'] += ("\r\np. Original comment: " + '"' + c['link'] +
+                              '":' + c['link'] + "\r\n")
+                c['body'] += ("\r\np. Original author: " + '"' + c['orig_user'] +
+                              '":' + c['orig_user'] + "\r\n")
             del c['link']
             del c['orig_user']
 
@@ -478,6 +482,8 @@ if __name__ == "__main__":
     parser.add_option('--end-at', dest = 'end_at', help = 'End at the given Google Code issue number', default = None, type = int)
     parser.add_option('--issues-start-from', dest = 'issues_start_from', help = 'First issue number', default = 1, type = int)
     parser.add_option('--milestones-start-from', dest = 'milestones_start_from', help = 'First milestone number', default = 1, type = int)
+    parser.add_option('--issues-link', dest = 'issues_link', help = 'Full link to issues page in the new repo', default = None, type = str)
+
 
     options, args = parser.parse_args()
 
