@@ -245,22 +245,6 @@ def add_issue_to_github(issue):
         f.write('\n')
 
 
-def get_attachments(link, attachments):
-    if not attachments:
-        return ''
-
-    body = '\n\n'
-    for attachment in (pq(a) for a in attachments):
-        if not attachment('a'): # Skip deleted attachments
-            continue
-
-        # Linking to the comment with the attachment rather than the
-        # attachment itself since Google Code uses download tokens for
-        # attachments
-        body += '**Attachment:** [{}]({})'.format(attachment('b').text().encode('utf-8'), link)
-    return body
-
-
 def get_gcode_issue(issue_summary):
     # Populate properties available from the summary CSV
     issue = {
