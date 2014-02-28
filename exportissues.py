@@ -402,6 +402,7 @@ def get_gcode_issue(issue_summary):
             i = re.sub(r'^c([0-9]+)$', r'\1', pq(comment)('a').attr('name'), flags=re.DOTALL)
         else:
             i = str(len(issue['comments']) + 1)
+            output("issue %d FIXME: comment №%d\n" % (issue['gid'] + (options.issues_start_from - 1), i))
 
         c = { 'date': date,
               'user': {'email': user},
