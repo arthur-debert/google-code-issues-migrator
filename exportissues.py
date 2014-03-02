@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 
 #
 # TODO:
@@ -96,6 +97,17 @@ def get_gc_issue(s):
     return n
 
 
+def fix_gc_issue_n(s, on, nn):
+    reg = [ r'(\*\*Blockedon:\*\*) ' + str(on),
+            r'(\*\*Blocking:\*\*) ' + str(on),
+            r'(\*\*Blocking:\*\*) ' + google_project_name + r':' + str(on),
+            r'(\*\*Blockedon:\*\*) ' + google_project_name + r':' +str(on),
+            r'(issue) ' + str(on) ]
+    for r in reg:
+        s = re.sub(r, r'\1 ' + str(nn), s)
+    return s
+
+
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
@@ -145,6 +157,9 @@ def add_issue_to_github(issue):
 
     idx = get_gc_issue(issue['body'])
     if idx:
+        for i in idx:
+            nn = i + (options.issues_start_from - 1)
+            issue['body'] = fix_gc_issue_n(issue['body'], i, nn)
         idx = [i + (options.issues_start_from - 1) for i in idx]
 
     if len(issue['body']) >= 65534:
@@ -209,7 +224,11 @@ def add_issue_to_github(issue):
             del c['date']
             c['updated_at'] = updated_at
             idx = get_gc_issue(c['body'])
-
+            if idx:
+                for i in idx:
+                    nn = i + (options.issues_start_from - 1)
+                    c['body'] = fix_gc_issue_n(c['body'], i, nn)
+                idx = [i + (options.issues_start_from - 1) for i in idx]
             body = ""
             for i in c['body']:
                 if i >= u"\uffff":
