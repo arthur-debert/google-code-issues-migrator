@@ -32,14 +32,12 @@ GOOGLE_URL_RE = 'http://code.google.com/p/%s/issues/detail\?id=(\d+)'
 GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL_RE)
 
 # Mapping from Google Code issue labels to Github labels
-
 LABEL_MAPPING = {
     'Type-Defect' : 'bug',
     'Type-Enhancement' : 'enhancement'
 }
 
 # Mapping from Google Code issue states to Github labels
-
 STATE_MAPPING = {
     'invalid': 'invalid',
     'duplicate': 'duplicate',
@@ -111,17 +109,12 @@ def fix_gc_issue_n(s, on, nn):
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
-    # Github rate-limits API requests to 5000 per hour, and if we hit that limit part-way
-    # through adding an issue it could end up in an incomplete state.  To avoid this we'll
-    # ensure that there are enough requests remaining before we start migrating an issue.
-
-    gid = issue['gid']
+    gid = issue['number']
     gid += (options.issues_start_from - 1)
 
     output('Adding issue %d' % gid)
 
     issue['number'] = gid
-    del issue['gid']
     try:
         issue['milestone'] += (options.milestones_start_from - 1)
     except KeyError:
@@ -132,8 +125,6 @@ def add_issue_to_github(issue):
         output(" FIXME: empty title")
     comments = issue['comments']
     del issue['comments']
-    issue['created_at'] = issue['date']
-    del issue['date']
     del issue['status']
     try:
         del issue['Cc']
@@ -145,8 +136,6 @@ def add_issue_to_github(issue):
         del issue['owner']
     except KeyError:
         pass
-    updated_at = datetime.fromtimestamp(int(time())).isoformat() + "Z"
-    issue['updated_at'] = updated_at
 
     markdown_date = gt('2009-04-20T19:00:00Z')
     # markdown:
@@ -220,9 +209,6 @@ def add_issue_to_github(issue):
     with open("issues/" + str(issue['number']) + ".comments.json", "w") as f:
         comments_fixed = list(comments)
         for i, c in enumerate(comments):
-            c['created_at'] = c['date']
-            del c['date']
-            c['updated_at'] = updated_at
             idx = get_gc_issue(c['body'])
             if idx:
                 for i in idx:
@@ -270,13 +256,14 @@ def add_issue_to_github(issue):
 def get_gcode_issue(issue_summary):
     # Populate properties available from the summary CSV
     issue = {
-        'gid': int(issue_summary['ID']),
+        'number': int(issue_summary['ID']),
         'title': issue_summary['Summary'].replace('%', '&#37;'),
         'link': GOOGLE_URL.format(google_project_name, issue_summary['ID']),
         'owner': issue_summary['Owner'],
         'state': 'closed' if issue_summary['Closed'] else 'open',
-        'date': datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])).isoformat() + "Z",
-        'status': issue_summary['Status'].lower()
+        'created_at': datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])).isoformat() + "Z",
+        'status': issue_summary['Status'].lower(),
+        'updated_at': options.updated_at
     }
 
     global mnum
@@ -304,9 +291,9 @@ def get_gcode_issue(issue_summary):
                 milestones[ms] = {'number': mnum,
                                   'state': 'open',
                                   'title': ms,
-                                  'created_at': issue['date']
+                                  'created_at': issue['created_at']
                                   }
-                mnum+=1
+                mnum += 1
             issue['milestone'] = milestones[ms]['number']
 
     # Add additional labels based on the issue's state
@@ -335,7 +322,6 @@ def get_gcode_issue(issue_summary):
     issue['orig_user'] = uid
 
     # Handle Owner and Cc fields...
-
     for tr in doc('div[id="meta-float"]')('tr'):
         if pq(tr)('th').filter(lambda i, this: pq(this).text() == 'Owner:'):
             tmp = pq(tr)('.userlink')
@@ -356,7 +342,6 @@ def get_gcode_issue(issue_summary):
                     issue['orig_owner'] = oid
                     break # only one owner
             break
-
     for tr in doc('div[id="meta-float"]')('tr'):
         if pq(tr)('th').filter(lambda i, this: pq(this).text() == 'Cc:'):
             tmp = pq(tr)('.userlink')
@@ -393,7 +378,7 @@ def get_gcode_issue(issue_summary):
             body = comment('pre').text()
         except UnicodeDecodeError:
             body = u'FIXME: UnicodeDecodeError'
-            output("issue %d FIXME: UnicodeDecodeError\n" % (issue['gid'] + (options.issues_start_from - 1)))
+            output("issue %d FIXME: UnicodeDecodeError\n" % (issue['number'] + (options.issues_start_from - 1)))
 
         tmp = comment('.userlink').attr('href')
         if tmp:
@@ -421,13 +406,14 @@ def get_gcode_issue(issue_summary):
             i = re.sub(r'^c([0-9]+)$', r'\1', pq(comment)('a').attr('name'), flags=re.DOTALL)
         else:
             i = str(len(issue['comments']) + 1)
-            output("issue %d FIXME: comment №%d\n" % (issue['gid'] + (options.issues_start_from - 1), i))
+            output("issue %d FIXME: comment №%d\n" % (issue['number'] + (options.issues_start_from - 1), i))
 
-        c = { 'date': date,
+        c = { 'created_at': date,
               'user': {'email': user},
               'body': body,
               'link': issue['link'] + '#c' + str(i),
-              'orig_user': uid
+              'orig_user': uid,
+              'updated_at': options.updated_at
             }
         issue['comments'].append(c)
 
@@ -496,7 +482,7 @@ if __name__ == "__main__":
     parser.add_option('--issues-start-from', dest = 'issues_start_from', help = 'First issue number', default = 1, type = int)
     parser.add_option('--milestones-start-from', dest = 'milestones_start_from', help = 'First milestone number', default = 1, type = int)
     parser.add_option('--issues-link', dest = 'issues_link', help = 'Full link to issues page in the new repo', default = None, type = str)
-
+    parser.add_option('--export-date', dest = 'updated_at', help = 'Date of export', default = None, type = str)
 
     options, args = parser.parse_args()
 
@@ -515,6 +501,8 @@ if __name__ == "__main__":
     authors_orig = authors.copy()
     milestones = {}
     mnum = 1
+    if not options.updated_at:
+        options.updated_at = datetime.fromtimestamp(int(time())).isoformat() + "Z"
 
     if not os.path.exists('issues'):
         os.mkdir('issues')
