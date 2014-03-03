@@ -26,7 +26,7 @@ from pyquery import PyQuery as pq
 GOOGLE_MAX_RESULTS = 25
 
 GOOGLE_ISSUE_TEMPLATE = '_Original issue: {}_'
-GOOGLE_ISSUES_URL = 'https://code.google.com/p/{}/issues/csv?can=1&num={}&start={}&colspec=ID%20Type%20Status%20Owner%20Summary%20Opened%20Closed%20Reporter&sort=id'
+GOOGLE_ISSUES_URL = 'https://code.google.com/p/{}/issues/csv?can=1&num={}&start={}&colspec=ID%20Type%20Status%20Owner%20Summary%20Opened%20Closed%20Reporter%20BlockedOn%20Blocking&sort=id'
 GOOGLE_URL = 'http://code.google.com/p/{}/issues/detail?id={}'
 GOOGLE_URL_RE = 'http://code.google.com/p/%s/issues/detail\?id=(\d+)'
 GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL_RE)
@@ -149,7 +149,7 @@ def add_issue_to_github(issue):
         for i in idx:
             nn = i + (options.issues_start_from - 1)
             issue['body'] = fix_gc_issue_n(issue['body'], i, nn)
-        idx = [i + (options.issues_start_from - 1) for i in idx]
+        idx = set(i + (options.issues_start_from - 1) for i in idx)
 
     if len(issue['body']) >= 65534:
         issue['body'] = "FIXME: too long issue body"
@@ -173,6 +173,64 @@ def add_issue_to_github(issue):
     i_tmpl = '"#{}"'
     if options.issues_link:
         i_tmpl = '"#{}":' + options.issues_link + '/{}'
+
+    c_idx = set()
+    with open("issues/" + str(issue['number']) + ".comments.json", "w") as f:
+        comments_fixed = list(comments)
+        for i, c in enumerate(comments):
+            c_i = get_gc_issue(c['body'])
+            if c_i:
+                for i in c_i:
+                    nn = i + (options.issues_start_from - 1)
+                    c['body'] = fix_gc_issue_n(c['body'], i, nn)
+                c_i = set(i + (options.issues_start_from - 1) for i in c_i)
+                c_idx |= c_i
+            body = ""
+            for i in c['body']:
+                if i >= u"\uffff":
+                    body += "FIXME: unicode %s" % hex(ord(i))
+                    output(" FIXME: unicode %s" % hex(ord(i)))
+                else:
+                    body += i
+            c['body'] = body
+
+            if len(c['body']) >= 65534:
+                c['body'] = "FIXME: too long comment body"
+                output(" FIXME: comment %d - too long body" % i + 1)
+
+            if gt(c['created_at']) >= markdown_date:
+                c['body'] = "```\r\n" + c['body'] + "\r\n```\r\n"
+                if c_i:
+                    c['body'] += ("Referenced issues: " +
+                                  ", ".join("#" + str(i) for i in c_i) + "\r\n")
+                c['body'] += ("Original comment: " + c['link'] + "\r\n")
+                c['body'] += ("Original author: " + c['orig_user'] + "\r\n")
+            else:
+                c['body'] = "bc.. " + c['body'] + "\r\n"
+                if c_i:
+                    c['body'] += ("\r\np. Referenced issues: " +
+                                  ", ".join(i_tmpl.format(*[str(i)]*2) for i in c_i) + "\r\n")
+                c['body'] += ("\r\np. Original comment: " + '"' + c['link'] +
+                              '":' + c['link'] + "\r\n")
+                c['body'] += ("\r\np. Original author: " + '"' + c['orig_user'] +
+                              '":' + c['orig_user'] + "\r\n")
+            del c['link']
+            del c['orig_user']
+
+        comments = comments_fixed
+
+        f.write(json.dumps(comments, indent=4, separators=(',', ': '), sort_keys=True))
+        f.write('\n')
+
+    try:
+        refs = issue['references']
+        del issue['references']
+        idx |= set(i + (options.issues_start_from - 1) for i in refs)
+    except KeyError:
+        pass
+
+    if c_idx:
+        idx -= c_idx
 
     if gt(issue['created_at']) >= markdown_date:
         issue['body'] = ("```\r\n" + issue['body'] + "\r\n```\r\n" +
@@ -206,52 +264,6 @@ def add_issue_to_github(issue):
         f.write(json.dumps(issue, indent=4, separators=(',', ': '), sort_keys=True))
         f.write('\n')
 
-    with open("issues/" + str(issue['number']) + ".comments.json", "w") as f:
-        comments_fixed = list(comments)
-        for i, c in enumerate(comments):
-            idx = get_gc_issue(c['body'])
-            if idx:
-                for i in idx:
-                    nn = i + (options.issues_start_from - 1)
-                    c['body'] = fix_gc_issue_n(c['body'], i, nn)
-                idx = [i + (options.issues_start_from - 1) for i in idx]
-            body = ""
-            for i in c['body']:
-                if i >= u"\uffff":
-                    body += "FIXME: unicode %s" % hex(ord(i))
-                    output(" FIXME: unicode %s" % hex(ord(i)))
-                else:
-                    body += i
-            c['body'] = body
-
-            if len(c['body']) >= 65534:
-                c['body'] = "FIXME: too long comment body"
-                output(" FIXME: comment %d - too long body" % i + 1)
-
-            if gt(c['created_at']) >= markdown_date:
-                c['body'] = "```\r\n" + c['body'] + "\r\n```\r\n"
-                if idx:
-                    c['body'] += ("Referenced issues: " +
-                                  ", ".join("#" + str(i) for i in idx) + "\r\n")
-                c['body'] += ("Original comment: " + c['link'] + "\r\n")
-                c['body'] += ("Original author: " + c['orig_user'] + "\r\n")
-            else:
-                c['body'] = "bc.. " + c['body'] + "\r\n"
-                if idx:
-                    c['body'] += ("\r\np. Referenced issues: " +
-                                  ", ".join(i_tmpl.format(*[str(i)]*2) for i in idx) + "\r\n")
-                c['body'] += ("\r\np. Original comment: " + '"' + c['link'] +
-                              '":' + c['link'] + "\r\n")
-                c['body'] += ("\r\np. Original author: " + '"' + c['orig_user'] +
-                              '":' + c['orig_user'] + "\r\n")
-            del c['link']
-            del c['orig_user']
-
-        comments = comments_fixed
-
-        f.write(json.dumps(comments, indent=4, separators=(',', ': '), sort_keys=True))
-        f.write('\n')
-
 
 def get_gcode_issue(issue_summary):
     # Populate properties available from the summary CSV
@@ -265,6 +277,14 @@ def get_gcode_issue(issue_summary):
         'status': issue_summary['Status'].lower(),
         'updated_at': options.updated_at
     }
+
+    refs = set()
+    for k in ['BlockedOn', 'Blocking']:
+        b = issue_summary[k]
+        if b:
+            refs |= set(map(int, b.split(',')))
+    if refs:
+        issue['references'] = refs
 
     global mnum
     global milestones
