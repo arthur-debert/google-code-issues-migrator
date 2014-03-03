@@ -107,6 +107,10 @@ def fix_gc_issue_n(s, on, nn):
     return s
 
 
+def reindent(s, n=4):
+    return "\n".join((n * " ") + i for i in s.splitlines())
+
+
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
@@ -187,12 +191,12 @@ def add_issue_to_github(issue):
                 c_i = set(i + (options.issues_start_from - 1) for i in c_i)
                 c_idx |= c_i
             body = ""
-            for i in c['body']:
-                if i >= u"\uffff":
-                    body += "FIXME: unicode %s" % hex(ord(i))
-                    output(" FIXME: unicode %s" % hex(ord(i)))
+            for s in c['body']:
+                if s >= u"\uffff":
+                    body += "FIXME: unicode %s" % hex(ord(s))
+                    output(" FIXME: unicode %s" % hex(ord(s)))
                 else:
-                    body += i
+                    body += s
             c['body'] = body
 
             if len(c['body']) >= 65534:
@@ -200,7 +204,12 @@ def add_issue_to_github(issue):
                 output(" FIXME: comment %d - too long body" % i + 1)
 
             if gt(c['created_at']) >= markdown_date:
-                c['body'] = "```\r\n" + c['body'] + "\r\n```\r\n"
+                if c['body'].find("```") >= 0:
+                    c['body'] = reindent(c['body'])
+                    output(" FIXME: triple quotes in c%s" % str(i))
+                else:
+                    c['body'] = "```\r\n" + c['body'] + "\r\n```"
+                c['body'] += "\r\n"
                 if c_i:
                     c['body'] += ("Referenced issues: " +
                                   ", ".join("#" + str(i) for i in c_i) + "\r\n")
@@ -234,7 +243,14 @@ def add_issue_to_github(issue):
         idx -= c_idx
 
     if gt(issue['created_at']) >= markdown_date:
-        issue['body'] = ("```\r\n" + issue['body'] + "\r\n```\r\n" +
+        if issue['body'].find("```") >= 0:
+            issue['body'] = reindent(issue['body'])
+            output(" FIXME: triple quotes in issue body")
+        else:
+            issue['body'] = "```\r\n" + issue['body'] + "\r\n```"
+        issue['body'] += "\r\n"
+
+        issue['body'] = (issue['body'] +
                          "Original issue for #" + str(gid) + ": " +
                          issue['link'] + "\r\n" +
                          "Original author: " + issue['orig_user'] + "\r\n")
