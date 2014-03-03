@@ -39,6 +39,7 @@ LABEL_MAPPING = {
 
 # Mapping from Google Code issue states to Github labels
 STATE_MAPPING = {
+    'valid': 'valid',
     'invalid': 'invalid',
     'duplicate': 'duplicate',
     'wontfix': 'wontfix'
