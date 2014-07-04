@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import csv
 import getpass
 import logging
@@ -7,11 +8,15 @@ import optparse
 import re
 import sys
 import urllib2
+import shutil
 
 from datetime import datetime
 
+from github import Gist
+from github import GistFile
 from github import Github
 from github import GithubException
+from github import InputFileContent
 from pyquery import PyQuery as pq
 
 logging.basicConfig(level = logging.ERROR)
@@ -127,7 +132,44 @@ def add_comments_to_issue(github_issue, gcode_issue):
             output('.')
 
 
-def get_attachments(link, attachments):
+def get_attachments(link, attachments, issue_id, comment_id, existing_gists):
+    ## Comment this out and run with -d in order to slurp down all the attachments first.
+    text = ''
+    path = '%s/%s' % (issue_id, comment_id)
+    gists = {}
+    binaries = []
+    if os.path.isdir(path):
+      for f in os.listdir(path):
+        fname = path + '/' + f
+        binary = os.system('file -b ' + fname + ' | grep text > /dev/null')
+        if not binary:
+          data = open(fname, 'r')
+          content = InputFileContent(data.read())
+          data.close()
+          gists[f] = content
+        else:
+          binaries.append(f)
+      text = '\n\n'
+      if gists:
+        gist = None
+        if issue_id in existing_gists and comment_id in existing_gists[issue_id]:
+          gist = existing_gists[issue_id][comment_id]
+          print '\tUsing existing gists for issue: %s, comment: %s' % (issue_id, comment_id)
+        else:
+          print '\tCreating gist for issue: %s, comment: %s' % ( issue_id, comment_id)
+          gist = github_user.create_gist(True, gists, 'Migrated attachment for Guice issue %s, comment %s' % ( issue_id, comment_id ))
+          
+        text += '**Attachment:** [gist]({})'.format(gist.html_url)
+        for k, v in gist.files.iteritems():
+          text += '\n&nbsp;&nbsp;&nbsp;_[{}]({})_'.format(k, v.raw_url)
+        if binaries:
+          text += '\n'
+      if binaries:
+        text += '**Binary attachments:** [{}]({})'.format(', '.join(binaries), link)
+    return text
+    ## Stop uncommenting
+
+    ## Slurps down the attachments into local files...
     if not attachments:
         return ''
 
@@ -135,6 +177,33 @@ def get_attachments(link, attachments):
     for attachment in (pq(a) for a in attachments):
         if not attachment('a'): # Skip deleted attachments
             continue
+        for row in attachment('tr'):
+          row = pq(row)
+          if not row('b'): # skip previews of images
+            continue
+          name = row('b').text().encode('utf-8')
+          ignore = False
+
+          try:
+            stream = urllib2.urlopen('https:%s' % (row('a').attr('href')))
+          except urllib2.HTTPError, e:
+            if e.code != 400:
+              raise
+            else:
+              ignore = True
+              print 'Ignoring attachment for issue: %s, comment: %s, error: %s' % (issue_id, comment_id, e)
+          if not ignore:
+            path = '%s/%s' % (issue_id, comment_id)
+            fname = '%s/%s' % (path, name)
+            try:
+              os.makedirs(path)
+            except: 
+              if not os.path.isdir(path):
+                raise
+            file = open(fname, 'w+')
+            shutil.copyfileobj(stream, file)
+            file.close()
+            print 'wrote attachment: %s' % (fname)
 
         # Linking to the comment with the attachment rather than the
         # attachment itself since Google Code uses download tokens for
@@ -143,7 +212,7 @@ def get_attachments(link, attachments):
     return body
 
 
-def get_gcode_issue(issue_summary):
+def get_gcode_issue(issue_summary, existing_gists):
     def get_author(doc):
         userlink = doc('.userlink')
         return '[{}](https://code.google.com{})'.format(userlink.text(), userlink.attr('href'))
@@ -178,7 +247,6 @@ def get_gcode_issue(issue_summary):
     if options.google_code_cookie:
         opener.addheaders = [('Cookie', options.google_code_cookie)]
     doc = pq(opener.open(issue['link']).read())
-
     description = doc('.issuedescription .issuedescription')
     issue['author'] = get_author(description)
 
@@ -199,7 +267,7 @@ def get_gcode_issue(issue_summary):
     issue['content'] = u'_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
             content = issue['comments'].pop(0)['body'],
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
-            attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments')),
+            attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments'), issue['gid'], 0, existing_gists),
             **issue)
 
     issue['comments'] = []
@@ -213,12 +281,13 @@ def get_gcode_issue(issue_summary):
         date = parse_gcode_date(comment('.date').attr('title'))
         body = comment('pre').text()
         author = get_author(comment)
+        cid = int(comment.attr('id')[2:])
 
         updates = comment('.updates .box-inner')
         if updates:
             body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
 
-        body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'))
+        body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'), issue['gid'], cid, existing_gists)
 
         # Strip the placeholder text if there's any other updates
         body = body.replace('(No comment was entered for this change.)\n\n', '')
@@ -242,14 +311,14 @@ def get_gcode_issues():
             return issues
 
 
-def process_gcode_issues(existing_issues):
+def process_gcode_issues(existing_issues, existing_gists):
     """ Migrates all Google Code issues in the given dictionary to Github. """
 
     issues = get_gcode_issues()
     previous_gid = 1
 
     for issue in issues:
-        issue = get_gcode_issue(issue)
+        issue = get_gcode_issue(issue, existing_gists)
 
         if options.skip_closed and (issue['state'] == 'closed'):
             continue
@@ -288,6 +357,27 @@ def process_gcode_issues(existing_issues):
 
         log_rate_info()
 
+def get_existing_github_gists():
+    """ Returns a dictionary of Github gists to previously migrated attachments.
+
+    The result maps issue_id -> comment_id -> gist
+    """
+    output('Retrieving existing Github user gists...\n')
+    ret = {}
+    match_re = re.compile("Migrated attachment for Guice issue (\d+), comment (\d+)")
+
+    for gist in github_user.get_gists():
+      match = match_re.search(gist.description)
+      if not match:
+        continue
+      issue = int(match.group(1))
+      comment = int(match.group(2))
+      if issue in ret:
+        ret[issue][comment] = gist
+      else:
+        ret[issue] = { comment: gist }
+    return ret
+
 
 def get_existing_github_issues():
     """ Returns a dictionary of Github issues previously migrated from Google Code.
@@ -322,7 +412,7 @@ def get_existing_github_issues():
 
 
 def log_rate_info():
-    logging.info('Rate limit (remaining/total) %r', github.rate_limiting)
+    print 'Rate limit (remaining/total) {}'.format(github.rate_limiting)
     # Note: this requires extended version of PyGithub from tfmorris/PyGithub repo
     #logging.info('Rate limit (remaining/total) %s',repr(github.rate_limit(refresh=True)))
 
@@ -351,12 +441,12 @@ if __name__ == "__main__":
     while True:
         github_password = getpass.getpass("Github password: ")
         try:
-            Github(github_user_name, github_password).get_user().login
+            Github(github_user_name, github_password, timeout = 45).get_user().login
             break
         except BadCredentialsException:
             print "Bad credentials, try again."
 
-    github = Github(github_user_name, github_password)
+    github = Github(github_user_name, github_password, timeout = 45)
     log_rate_info()
     github_user = github.get_user()
 
@@ -379,8 +469,10 @@ if __name__ == "__main__":
 
     try:
         existing_issues = get_existing_github_issues()
+        existing_gists = get_existing_github_gists()
+        print existing_gists
         log_rate_info()
-        process_gcode_issues(existing_issues)
+        process_gcode_issues(existing_issues, existing_gists)
     except Exception:
         parser.print_help()
         raise
