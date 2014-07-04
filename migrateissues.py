@@ -133,7 +133,6 @@ def add_comments_to_issue(github_issue, gcode_issue):
 
 
 def get_attachments(link, attachments, issue_id, comment_id, existing_gists):
-    ## Comment this out and run with -d in order to slurp down all the attachments first.
     text = ''
     path = '%s/%s' % (issue_id, comment_id)
     gists = {}
@@ -167,9 +166,9 @@ def get_attachments(link, attachments, issue_id, comment_id, existing_gists):
       if binaries:
         text += '**Binary attachments:** [{}]({})'.format(', '.join(binaries), link)
     return text
-    ## Stop uncommenting
 
-    ## Slurps down the attachments into local files...
+
+   
     if not attachments:
         return ''
 
@@ -233,6 +232,8 @@ def get_gcode_issue(issue_summary, existing_gists):
     labels = ['imported']
     for label in issue_summary['AllLabels'].split(', '):
         if label.startswith('Priority-') and options.omit_priority:
+            continue
+        if not label:
             continue
         labels.append(LABEL_MAPPING.get(label, label))
 
@@ -316,6 +317,11 @@ def process_gcode_issues(existing_issues, existing_gists):
 
     issues = get_gcode_issues()
     previous_gid = 1
+
+    if options.start_at is not None:
+        issues = [x for x in issues if int(x['ID']) >= options.start_at]
+        previous_gid = options.start_at - 1
+        output('Starting at issue%d\n' % options.start_at)
 
     for issue in issues:
         issue = get_gcode_issue(issue, existing_gists)
@@ -427,6 +433,7 @@ if __name__ == "__main__":
     parser.add_option("-s", "--synchronize-ids", action = "store_true", dest = "synchronize_ids", help = "Ensure that migrated issues keep the same ID", default = False)
     parser.add_option("-c", "--google-code-cookie", dest = "google_code_cookie", help = "Cookie to use for Google Code requests. Required to get unmangled names", default = '')
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
+    parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
 
     options, args = parser.parse_args()
 
