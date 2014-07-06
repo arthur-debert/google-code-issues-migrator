@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import csv
 import getpass
 import logging
@@ -7,11 +8,14 @@ import optparse
 import re
 import sys
 import urllib2
+import shutil
+import github
 
 from datetime import datetime
 
 from github import Github
 from github import GithubException
+from github import InputFileContent
 from pyquery import PyQuery as pq
 
 logging.basicConfig(level = logging.ERROR)
@@ -55,6 +59,55 @@ def escape(s):
     if s:
         s = s.replace('%', '&#37;')  # Escape % signs
     return s
+
+def escape_comment(s):
+    """Escape text in comments"""
+    if s:
+      original = s
+      segments = re.split(r'(https?://\S+\s?)', s, re.DOTALL)
+      for i in range(0, len(segments), 2):
+        s = segments[i]
+        # Single character replacements...
+        s = s.replace('&', '&amp;')
+        s = s.replace('+', '\\+')
+        s = s.replace('*', '\\*')
+        s = s.replace('<', '&lt;')
+        s = s.replace('>', '&gt;')
+        s = s.replace('-', '\\-')
+        s = s.replace('`', '\\`')
+        s = s.replace('_', '\\_')
+        s = s.replace('{', '\\{')
+        s = s.replace('}', '\\}')
+        s = s.replace('[', '\\[')
+        s = s.replace(']', '\\]')
+        s = s.replace('(', '\\(')
+        s = s.replace(')', '\\)')
+        s = s.replace('!', '\\!')
+        s = s.replace('@', '`@`') # not perfect, but as close as we can get
+
+        # beginning of patches... can't escape = symbol, so just need to wrap it
+        # in a code block
+        s = s.replace('===================================================================', '`===================================================================`')
+
+        # tabs -> spaces (8 spaces to mirror codesite), so we can fix
+        # space->nbsp below.
+        s = s.replace('\t', '        ')
+
+        # also need to convert all leading whitespace to nbsp
+        spaces = re.compile(r'^(?P<spaces> +).+', re.MULTILINE)
+        s = spaces.sub(space_to_nbsp, s)
+
+        # and convert sequences of more than one space so the subsequent spaces
+        # are nbsp
+        spaces = re.compile(r'\S+ (?P<spaces> +)\S+')
+        s = spaces.sub(space_to_nbsp, s)
+        segments[i] = s
+      s = ''.join(segments)
+    return s
+
+def space_to_nbsp(match):
+    spaces = match.group('spaces')
+    return match.group().replace(spaces, '&nbsp;' * len(spaces))
 
 def github_label(name, color = "FFFFFF"):
     """ Returns the Github label with the given name, creating it if necessary. """
@@ -127,7 +180,43 @@ def add_comments_to_issue(github_issue, gcode_issue):
             output('.')
 
 
-def get_attachments(link, attachments):
+def get_attachments(link, attachments, issue_id, comment_id, existing_gists):
+    text = ''
+    path = '%s/%s' % (issue_id, comment_id)
+    gists = {}
+    binaries = []
+    if os.path.isdir(path):
+      for f in os.listdir(path):
+        fname = path + '/' + f
+        binary = os.system('file -b ' + fname + ' | grep text > /dev/null')
+        if not binary:
+          data = open(fname, 'r')
+          content = InputFileContent(data.read())
+          data.close()
+          gists[f] = content
+        else:
+          binaries.append(f)
+      text = '\n\n'
+      if gists:
+        gist = None
+        if issue_id in existing_gists and comment_id in existing_gists[issue_id]:
+          gist = existing_gists[issue_id][comment_id]
+          print '\tUsing existing gists for issue: %s, comment: %s' % (issue_id, comment_id)
+        else:
+          print '\tCreating gist for issue: %s, comment: %s' % ( issue_id, comment_id)
+          gist = github_user.create_gist(True, gists, 'Migrated attachment for Guice issue %s, comment %s' % ( issue_id, comment_id ))
+          
+        text += '**Attachment:** [gist]({})'.format(gist.html_url)
+        for k, v in gist.files.iteritems():
+          text += '\n&nbsp;&nbsp;&nbsp;_[{}]({})_'.format(k, v.raw_url)
+        if binaries:
+          text += '\n'
+      if binaries:
+        text += '**Binary attachments:** [{}]({})'.format(', '.join(binaries), link)
+    return text
+
+
+   
     if not attachments:
         return ''
 
@@ -135,6 +224,33 @@ def get_attachments(link, attachments):
     for attachment in (pq(a) for a in attachments):
         if not attachment('a'): # Skip deleted attachments
             continue
+        for row in attachment('tr'):
+          row = pq(row)
+          if not row('b'): # skip previews of images
+            continue
+          name = row('b').text().encode('utf-8')
+          ignore = False
+
+          try:
+            stream = urllib2.urlopen('https:%s' % (row('a').attr('href')))
+          except urllib2.HTTPError, e:
+            if e.code != 400:
+              raise
+            else:
+              ignore = True
+              print 'Ignoring attachment for issue: %s, comment: %s, error: %s' % (issue_id, comment_id, e)
+          if not ignore:
+            path = '%s/%s' % (issue_id, comment_id)
+            fname = '%s/%s' % (path, name)
+            try:
+              os.makedirs(path)
+            except: 
+              if not os.path.isdir(path):
+                raise
+            file = open(fname, 'w+')
+            shutil.copyfileobj(stream, file)
+            file.close()
+            print 'wrote attachment: %s' % (fname)
 
         # Linking to the comment with the attachment rather than the
         # attachment itself since Google Code uses download tokens for
@@ -143,7 +259,7 @@ def get_attachments(link, attachments):
     return body
 
 
-def get_gcode_issue(issue_summary):
+def get_gcode_issue(issue_summary, existing_gists):
     def get_author(doc):
         userlink = doc('.userlink')
         return '[{}](https://code.google.com{})'.format(userlink.text(), userlink.attr('href'))
@@ -165,6 +281,8 @@ def get_gcode_issue(issue_summary):
     for label in issue_summary['AllLabels'].split(', '):
         if label.startswith('Priority-') and options.omit_priority:
             continue
+        if not label:
+            continue
         labels.append(LABEL_MAPPING.get(label, label))
 
     # Add additional labels based on the issue's state
@@ -178,7 +296,6 @@ def get_gcode_issue(issue_summary):
     if options.google_code_cookie:
         opener.addheaders = [('Cookie', options.google_code_cookie)]
     doc = pq(opener.open(issue['link']).read())
-
     description = doc('.issuedescription .issuedescription')
     issue['author'] = get_author(description)
 
@@ -195,11 +312,11 @@ def get_gcode_issue(issue_summary):
                 text = '...' + text
             issue['comments'].append(comment.copy())
 
-    split_comment(issue, description('pre').text())
+    split_comment(issue, escape_comment(description('pre').text()))
     issue['content'] = u'_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
             content = issue['comments'].pop(0)['body'],
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
-            attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments')),
+            attachments = get_attachments(issue['link'], doc('.issuedescription .issuedescription .attachments'), issue['gid'], 0, existing_gists),
             **issue)
 
     issue['comments'] = []
@@ -211,14 +328,15 @@ def get_gcode_issue(issue_summary):
             continue # Skip deleted comments
 
         date = parse_gcode_date(comment('.date').attr('title'))
-        body = comment('pre').text()
+        body = escape_comment(comment('pre').text())
         author = get_author(comment)
+        cid = int(comment.attr('id')[2:])
 
         updates = comment('.updates .box-inner')
         if updates:
             body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
 
-        body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'))
+        body += get_attachments('{}#{}'.format(issue['link'], comment.attr('id')), comment('.attachments'), issue['gid'], cid, existing_gists)
 
         # Strip the placeholder text if there's any other updates
         body = body.replace('(No comment was entered for this change.)\n\n', '')
@@ -242,14 +360,19 @@ def get_gcode_issues():
             return issues
 
 
-def process_gcode_issues(existing_issues):
+def process_gcode_issues(existing_issues, existing_gists):
     """ Migrates all Google Code issues in the given dictionary to Github. """
 
     issues = get_gcode_issues()
     previous_gid = 1
 
+    if options.start_at is not None:
+        issues = [x for x in issues if int(x['ID']) >= options.start_at]
+        previous_gid = options.start_at - 1
+        output('Starting at issue%d\n' % options.start_at)
+
     for issue in issues:
-        issue = get_gcode_issue(issue)
+        issue = get_gcode_issue(issue, existing_gists)
 
         if options.skip_closed and (issue['state'] == 'closed'):
             continue
@@ -288,6 +411,31 @@ def process_gcode_issues(existing_issues):
 
         log_rate_info()
 
+def get_existing_github_gists(delete = False):
+    """ Returns a dictionary of Github gists to previously migrated attachments.
+
+    The result maps issue_id -> comment_id -> gist
+    """
+    output('Retrieving existing Github user gists...\n')
+    ret = {}
+    match_re = re.compile("Migrated attachment for Guice issue (\d+), comment (\d+)")
+
+    for gist in github_user.get_gists():
+      match = match_re.search(gist.description)
+      if not match:
+        continue
+      issue = int(match.group(1))
+      comment = int(match.group(2))
+      if delete:
+        print 'Deleting gist for issue %s, comment %s' % (issue, comment)
+        gist.delete()
+      else:
+        if issue in ret:
+          ret[issue][comment] = gist
+        else:
+          ret[issue] = { comment: gist }
+    return ret
+
 
 def get_existing_github_issues():
     """ Returns a dictionary of Github issues previously migrated from Google Code.
@@ -299,7 +447,7 @@ def get_existing_github_issues():
     id_re = re.compile(GOOGLE_ID_RE % google_project_name)
 
     try:
-        existing_issues = list(github_repo.get_issues(state='open')) + list(github_repo.get_issues(state='closed'))
+        existing_issues = list(github_repo.get_issues(state='all'))
         existing_count = len(existing_issues)
         issue_map = {}
         for issue in existing_issues:
@@ -309,7 +457,7 @@ def get_existing_github_issues():
 
             google_id = int(id_match.group(1))
             issue_map[google_id] = issue
-            labels = [l.name for l in issue.get_labels()]
+            labels = [l.name for l in issue.labels]
             if not 'imported' in labels:
                 # TODO we could fix up the label here instead of just warning
                 logging.warn('Issue missing imported label %s- %r - %s', google_id, labels, issue.title)
@@ -322,7 +470,7 @@ def get_existing_github_issues():
 
 
 def log_rate_info():
-    logging.info('Rate limit (remaining/total) %r', github.rate_limiting)
+    print 'Rate limit (remaining/total) {}'.format(github.rate_limiting)
     # Note: this requires extended version of PyGithub from tfmorris/PyGithub repo
     #logging.info('Rate limit (remaining/total) %s',repr(github.rate_limit(refresh=True)))
 
@@ -337,6 +485,8 @@ if __name__ == "__main__":
     parser.add_option("-s", "--synchronize-ids", action = "store_true", dest = "synchronize_ids", help = "Ensure that migrated issues keep the same ID", default = False)
     parser.add_option("-c", "--google-code-cookie", dest = "google_code_cookie", help = "Cookie to use for Google Code requests. Required to get unmangled names", default = '')
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
+    parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
+    parser.add_option('--delete-gists', dest = 'delete_gists', help = 'Delete all matching gists', default = False)
 
     options, args = parser.parse_args()
 
@@ -351,14 +501,18 @@ if __name__ == "__main__":
     while True:
         github_password = getpass.getpass("Github password: ")
         try:
-            Github(github_user_name, github_password).get_user().login
+            Github(github_user_name, github_password, timeout = 45).get_user().login
             break
-        except BadCredentialsException:
+        except github.BadCredentialsException:
             print "Bad credentials, try again."
 
-    github = Github(github_user_name, github_password)
+    github = Github(github_user_name, github_password, timeout = 45)
     log_rate_info()
     github_user = github.get_user()
+
+    if options.delete_gists:
+      get_existing_github_gists(True)
+      sys.exit()
 
     # If the project name is specified as owner/project, assume that it's owned by either
     # a different user than the one we have credentials for, or an organization.
@@ -379,8 +533,9 @@ if __name__ == "__main__":
 
     try:
         existing_issues = get_existing_github_issues()
+        existing_gists = get_existing_github_gists()
         log_rate_info()
-        process_gcode_issues(existing_issues)
+        process_gcode_issues(existing_issues, existing_gists)
     except Exception:
         parser.print_help()
         raise
