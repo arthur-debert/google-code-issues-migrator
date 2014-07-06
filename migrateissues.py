@@ -9,11 +9,10 @@ import re
 import sys
 import urllib2
 import shutil
+import github
 
 from datetime import datetime
 
-from github import Gist
-from github import GistFile
 from github import Github
 from github import GithubException
 from github import InputFileContent
@@ -60,6 +59,51 @@ def escape(s):
     if s:
         s = s.replace('%', '&#37;')  # Escape % signs
     return s
+
+def escape_comment(s):
+    """Escape text in comments"""
+    if s:
+      original = s
+      segments = re.split(r'(https?://\S+\s?)', s, re.DOTALL)
+      for i in range(0, len(segments), 2):
+        s = segments[i]
+        # Single character replacements...
+        s = s.replace('&', '&amp;')
+        s = s.replace('+', '\\+')
+        s = s.replace('*', '\\*')
+        s = s.replace('<', '&lt;')
+        s = s.replace('>', '&gt;')
+        s = s.replace('-', '\\-')
+        s = s.replace('`', '\\`')
+        s = s.replace('_', '\\_')
+        s = s.replace('{', '\\{')
+        s = s.replace('}', '\\}')
+        s = s.replace('[', '\\[')
+        s = s.replace(']', '\\]')
+        s = s.replace('(', '\\(')
+        s = s.replace(')', '\\)')
+        s = s.replace('!', '\\!')
+        s = s.replace('@', '`@`') # not perfect, but as close as we can get
+
+        # beginning of patches... can't escape = symbol, so just need to wrap it
+        # in a code block
+        s = s.replace('===================================================================', '`===================================================================`')
+
+        # also need to convert all leading whitespace to nbsp
+        spaces = re.compile(r'^(?P<spaces> +).+', re.MULTILINE)
+        s = spaces.sub(space_to_nbsp, s)
+
+        # and convert sequences of more than one space so the subsequent spaces
+        # are nbsp
+        spaces = re.compile(r'\S+ (?P<spaces> +)\S+')
+        s = spaces.sub(space_to_nbsp, s)
+        segments[i] = s
+      s = ''.join(segments)
+    return s
+
+def space_to_nbsp(match):
+    spaces = match.group('spaces')
+    return match.group().replace(spaces, '&nbsp;' * len(spaces))
 
 def github_label(name, color = "FFFFFF"):
     """ Returns the Github label with the given name, creating it if necessary. """
@@ -264,7 +308,7 @@ def get_gcode_issue(issue_summary, existing_gists):
                 text = '...' + text
             issue['comments'].append(comment.copy())
 
-    split_comment(issue, description('pre').text())
+    split_comment(issue, escape_comment(description('pre').text()))
     issue['content'] = u'_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
             content = issue['comments'].pop(0)['body'],
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
@@ -280,7 +324,7 @@ def get_gcode_issue(issue_summary, existing_gists):
             continue # Skip deleted comments
 
         date = parse_gcode_date(comment('.date').attr('title'))
-        body = comment('pre').text()
+        body = escape_comment(comment('pre').text())
         author = get_author(comment)
         cid = int(comment.attr('id')[2:])
 
@@ -363,7 +407,7 @@ def process_gcode_issues(existing_issues, existing_gists):
 
         log_rate_info()
 
-def get_existing_github_gists():
+def get_existing_github_gists(delete = False):
     """ Returns a dictionary of Github gists to previously migrated attachments.
 
     The result maps issue_id -> comment_id -> gist
@@ -378,10 +422,14 @@ def get_existing_github_gists():
         continue
       issue = int(match.group(1))
       comment = int(match.group(2))
-      if issue in ret:
-        ret[issue][comment] = gist
+      if delete:
+        print 'Deleting gist for issue %s, comment %s' % (issue, comment)
+        gist.delete()
       else:
-        ret[issue] = { comment: gist }
+        if issue in ret:
+          ret[issue][comment] = gist
+        else:
+          ret[issue] = { comment: gist }
     return ret
 
 
@@ -395,7 +443,7 @@ def get_existing_github_issues():
     id_re = re.compile(GOOGLE_ID_RE % google_project_name)
 
     try:
-        existing_issues = list(github_repo.get_issues(state='open')) + list(github_repo.get_issues(state='closed'))
+        existing_issues = list(github_repo.get_issues(state='all'))
         existing_count = len(existing_issues)
         issue_map = {}
         for issue in existing_issues:
@@ -405,7 +453,7 @@ def get_existing_github_issues():
 
             google_id = int(id_match.group(1))
             issue_map[google_id] = issue
-            labels = [l.name for l in issue.get_labels()]
+            labels = [l.name for l in issue.labels]
             if not 'imported' in labels:
                 # TODO we could fix up the label here instead of just warning
                 logging.warn('Issue missing imported label %s- %r - %s', google_id, labels, issue.title)
@@ -434,6 +482,7 @@ if __name__ == "__main__":
     parser.add_option("-c", "--google-code-cookie", dest = "google_code_cookie", help = "Cookie to use for Google Code requests. Required to get unmangled names", default = '')
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
+    parser.add_option('--delete-gists', dest = 'delete_gists', help = 'Delete all matching gists', default = False)
 
     options, args = parser.parse_args()
 
@@ -450,12 +499,16 @@ if __name__ == "__main__":
         try:
             Github(github_user_name, github_password, timeout = 45).get_user().login
             break
-        except BadCredentialsException:
+        except github.BadCredentialsException:
             print "Bad credentials, try again."
 
     github = Github(github_user_name, github_password, timeout = 45)
     log_rate_info()
     github_user = github.get_user()
+
+    if options.delete_gists:
+      get_existing_github_gists(True)
+      sys.exit()
 
     # If the project name is specified as owner/project, assume that it's owned by either
     # a different user than the one we have credentials for, or an organization.
