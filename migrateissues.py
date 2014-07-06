@@ -89,6 +89,10 @@ def escape_comment(s):
         # in a code block
         s = s.replace('===================================================================', '`===================================================================`')
 
+        # tabs -> spaces (8 spaces to mirror codesite), so we can fix
+        # space->nbsp below.
+        s = s.replace('\t', '        ')
+
         # also need to convert all leading whitespace to nbsp
         spaces = re.compile(r'^(?P<spaces> +).+', re.MULTILINE)
         s = spaces.sub(space_to_nbsp, s)
@@ -530,7 +534,6 @@ if __name__ == "__main__":
     try:
         existing_issues = get_existing_github_issues()
         existing_gists = get_existing_github_gists()
-        print existing_gists
         log_rate_info()
         process_gcode_issues(existing_issues, existing_gists)
     except Exception:
