@@ -211,7 +211,11 @@ def get_gcode_issue(issue_summary):
             continue # Skip deleted comments
 
         date = parse_gcode_date(comment('.date').attr('title'))
-        body = comment('pre').text()
+        try:
+            body = comment('pre').text()
+        except:
+            body = "SEE ISSUE ON GH!"
+            logging.error("Comment cannot be imported due to some error in comment")
         author = get_author(comment)
 
         updates = comment('.updates .box-inner')
