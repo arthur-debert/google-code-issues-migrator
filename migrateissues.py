@@ -177,7 +177,10 @@ def get_gcode_issue(issue_summary):
     opener = urllib2.build_opener()
     if options.google_code_cookie:
         opener.addheaders = [('Cookie', options.google_code_cookie)]
-    doc = pq(opener.open(issue['link']).read())
+    connection = opener.open(issue['link'])
+    encoding = connection.headers['content-type'].split('charset=')[-1]
+    # Pass "ignore" so malformed page data doesn't abort us
+    doc = pq(connection.read().decode(encoding, "ignore"))
 
     description = doc('.issuedescription .issuedescription')
     issue['author'] = get_author(description)
