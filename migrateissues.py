@@ -56,6 +56,24 @@ def escape(s):
         s = s.replace('%', '&#37;')  # Escape % signs
     return s
 
+def transform_to_markdown_compliant(string):
+    # Escape chars interpreted as markdown formatting by GH
+    string = re.sub(r'(\s)~~', r'\1\\~~', string)
+    string = re.sub(r'\n(\s*)>', r'\n\1\\>', string)
+    string = re.sub(r'\n(\s*)#', r'\n\1\\#', string)
+    string = re.sub(r'(?m)^-([- \r]*)$', r'\\-\1', string)
+    # '==' is also making headers, but can't nicely escape ('\' shows up)
+    string = re.sub(r'(\S\s*\n)(=[= ]*(\r?\n|$))', r'\1\n\2', string)
+    # Escape < to avoid being treated as an html tag
+    string = re.sub(r'(\s)<', r'\1\\<', string)
+    # Avoid links that should not be links.
+    # I can find no way to escape the # w/o using backtics:
+    string = re.sub(r'(\s+)(#\d+)(\W)', r'\1`\2`\3', string)
+    # Create issue links
+    string = re.sub(r'\bi#(\d+)', r'issue #\1', string)
+    string = re.sub(r'\bissue (\d+)', r'issue #\1', string)
+    return string
+
 def github_label(name, color = "FFFFFF"):
     """ Returns the Github label with the given name, creating it if necessary. """
 
@@ -97,7 +115,9 @@ def add_issue_to_github(issue):
 
     if not options.dry_run:
         github_labels = [github_label(label) for label in issue['labels']]
-        github_issue = github_repo.create_issue(issue['title'], body = body.encode('utf-8'), labels = github_labels)
+        text = body.encode('utf-8')
+        text = transform_to_markdown_compliant(text)
+        github_issue = github_repo.create_issue(issue['title'], body = text, labels = github_labels)
 
     # Assigns issues that originally had an owner to the current user
     if issue['owner'] and options.assign_owner:
@@ -118,12 +138,14 @@ def add_comments_to_issue(github_issue, gcode_issue):
     output(", adding comments")
     for i, comment in enumerate(gcode_issue['comments']):
         body = u'_From {author} on {date}_\n\n{body}'.format(**comment)
-        if body in existing_comments:
+        topost = transform_to_markdown_compliant(body)
+        if topost in existing_comments:
             logging.info('Skipping comment %d: already present', i + 1)
         else:
             logging.info('Adding comment %d', i + 1)
             if not options.dry_run:
-                github_issue.create_comment(body.encode('utf-8'))
+                topost = topost.encode('utf-8')
+                github_issue.create_comment(topost)
             output('.')
 
 
