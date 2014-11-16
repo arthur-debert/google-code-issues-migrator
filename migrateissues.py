@@ -7,6 +7,7 @@ import optparse
 import re
 import sys
 import urllib2
+import time
 
 from datetime import datetime
 
@@ -147,7 +148,13 @@ def add_comments_to_issue(github_issue, gcode_issue):
                 topost = topost.encode('utf-8')
                 github_issue.create_comment(topost)
             output('.')
-
+            # We use a delay to avoid comments being created on GitHub
+            # in the wrong order, due to network non-determinism.
+            # Without this delay, I consistently observed a full 1 in 3
+            # GoogleCode issue comments being reordered.
+            # XXX: querying GitHub in a loop to see when the comment has
+            # been posted may be faster, but will cut into the rate limit.
+            time.sleep(5)
 
 def get_attachments(link, attachments):
     if not attachments:
