@@ -54,6 +54,7 @@ Run `pip install -r requirements.txt` to install all required libraries.
       -s, --synchronize-ids     Ensure that migrated issues keep the same ID
       -c, --google-code-cookie  Supply cookies to use for scraping Google Code
       --skip-closed             Skip all closed bugs
+      --start-at                Start at the given Google Code issue number
 
         You will be prompted for your github password.
 
@@ -82,3 +83,6 @@ and getting the raw names requires being logged in and having filled out a
 CAPTCHA.
 
 `--skip-closed` will skip migrating issues that were closed.
+
+`--start-at` will skip migrating issues with Google Code issue numbers less than 
+the provided value.
