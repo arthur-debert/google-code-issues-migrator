@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 import csv
 import getpass
@@ -22,7 +23,7 @@ logging.basicConfig(level = logging.INFO)
 GOOGLE_MAX_RESULTS = 25
 
 GOOGLE_ISSUE_TEMPLATE = '_Original issue: {}_'
-GOOGLE_ISSUES_URL = 'https://code.google.com/p/{}/issues/csv?can=1&num={}&start={}&colspec=ID%20Type%20Status%20Owner%20Summary%20Opened%20Closed%20Reporter&sort=id'
+GOOGLE_ISSUES_URL = 'https://code.google.com/p/{}/issues/csv?can=1&num={}&start={}&colspec=ID%20Type%20Status%20Owner%20Summary%20Opened%20Closed%20Reporter%20Stars&sort=id'
 GOOGLE_URL = 'http://code.google.com/p/{}/issues/detail?id={}'
 GOOGLE_URL_RE = 'http://code.google.com/p/%s/issues/detail\?id=(\d+)'
 GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL_RE)
@@ -46,6 +47,23 @@ STATE_MAPPING = {
     'duplicate': 'duplicate',
     'wontfix': 'wontfix'
 }
+
+def stars_to_label(stars):
+    '''Return a label string corresponding to a star range.
+
+    For example, '1' -> '1 star', '2' -> '2-5 stars', etc.
+    '''
+    stars = int(stars)
+    if stars == 1:
+        return '1 star'
+    elif stars <= 5:
+        return '2–5 stars'
+    elif stars <= 10:
+        return '6–10 stars'
+    elif stars <= 20:
+        return '11–20 stars'
+    else:
+        return '25+ stars'
 
 def output(string):
     sys.stdout.write(string)
@@ -147,7 +165,7 @@ def add_comments_to_issue(github_issue, gcode_issue):
             if not options.dry_run:
                 topost = topost.encode('utf-8')
                 github_issue.create_comment(topost)
-                
+
                 # We use a delay to avoid comments being created on GitHub
                 # in the wrong order, due to network non-determinism.
                 # Without this delay, I consistently observed a full 1 in 3
@@ -198,6 +216,9 @@ def get_gcode_issue(issue_summary):
         if not label:
             continue
         labels.append(LABEL_MAPPING.get(label, label))
+
+    if options.migrate_stars and 'Stars' in issue_summary:
+        labels.append(stars_to_label(issue_summary['Stars']))
 
     # Add additional labels based on the issue's state
     if issue['status'] in STATE_MAPPING:
@@ -378,6 +399,7 @@ if __name__ == "__main__":
     parser.add_option("-c", "--google-code-cookie", dest = "google_code_cookie", help = "Cookie to use for Google Code requests. Required to get unmangled names", default = '')
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
+    parser.add_option('--migrate-stars', action = 'store_true', dest = 'migrate_stars', help = 'Migrate binned star counts as labels', default = False)
 
     options, args = parser.parse_args()
 
