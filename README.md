@@ -45,6 +45,7 @@ Run `pip install -r requirements.txt` to install all required libraries.
       google_project_name       The project name (from the URL) from google code
       github_user_name          The Github username
       github_project            The Github project name, e.g. username/project
+                                For Organizations, use orgname/project
 
     Options:
       -h, --help                Show this help message and exit
