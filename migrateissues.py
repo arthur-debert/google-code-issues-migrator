@@ -63,7 +63,7 @@ def stars_to_label(stars):
     elif stars <= 20:
         return '11–20 stars'
     else:
-        return '25+ stars'
+        return '21+ stars'
 
 def output(string):
     sys.stdout.write(string)
