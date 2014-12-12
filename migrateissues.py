@@ -16,7 +16,7 @@ from github import Github
 from github import GithubException
 from pyquery import PyQuery as pq
 
-logging.basicConfig(level = logging.INFO)
+logging.basicConfig(level = logging.ERROR)
 
 # The maximum number of records to retrieve from Google Code in a single request
 
