@@ -283,18 +283,28 @@ def add_issue_to_github(issue):
 
 
 def map_author(gc_userlink):
-    tmp = gc_userlink.attr('href')
-    if tmp:
-        gc_uid = 'https://code.google.com{}'.format(tmp)
-    else:
-        gc_uid = gc_userlink.contents()[0]
-    if not gc_uid:
-        return None, None
-    try:
-        user = authors[gc_uid]
-    except KeyError:
-        user = authors[gc_uid] = valid_email(gc_uid)
-    return gc_uid, user
+    gc_uid = gc_userlink.text()
+    if gc_uid:
+        email_pat = gc_uid
+        if '@' not in email_pat:
+            email_pat += '@gmail.com'
+        email_pat = email_pat.replace('.', r'\.').replace(r'\.\.\.@', r'[\w.]+@')
+        email_re = re.compile(email_pat, re.I)
+
+        matches = []
+        for email, gh_user in authors.items():
+            if email_re.match(email):
+                matches.append((email, gh_user))
+        if len(matches) > 1:
+            output('FIXME: multiple matches for {gc_uid}'.format(**locals()))
+            for email, gh_user in matches:
+                output('\t{email}'.format(**locals()))
+        elif matches:
+            return matches[0]
+
+        return gc_uid, None
+
+    return None, None
 
 def get_gcode_issue(issue_summary):
     # Populate properties available from the summary CSV
