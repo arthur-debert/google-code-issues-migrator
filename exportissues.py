@@ -282,6 +282,20 @@ def add_issue_to_github(issue):
         f.write('\n')
 
 
+def map_author(gc_userlink):
+    tmp = gc_userlink.attr('href')
+    if tmp:
+        gc_uid = 'https://code.google.com{}'.format(tmp)
+    else:
+        gc_uid = gc_userlink.contents()[0]
+    if not gc_uid:
+        return None, None
+    try:
+        user = authors[gc_uid]
+    except KeyError:
+        user = authors[gc_uid] = valid_email(gc_uid)
+    return gc_uid, user
+
 def get_gcode_issue(issue_summary):
     # Populate properties available from the summary CSV
     issue = {
@@ -344,36 +358,19 @@ def get_gcode_issue(issue_summary):
     doc = pq(opener.open(issue['link']).read())
 
     description = doc('.issuedescription .issuedescription')
-    tmp = description('.userlink').attr('href')
-    if tmp:
-        uid = 'https://code.google.com{}'.format(tmp)
-    else:
-        uid = description('.userlink').contents()[0]
-    try:
-        authors[uid]
-    except KeyError:
-        authors[uid] = valid_email(uid)
-    user = authors[uid]
-    if user:
-        issue['user'] = {'email': user}
-    issue['orig_user'] = uid
+    uid, user = map_author(description('.userlink'))
+    if uid:
+        if user:
+            issue['user'] = {'email': user}
+        issue['orig_user'] = uid
 
     # Handle Owner and Cc fields...
     for tr in doc('div[id="meta-float"]')('tr'):
         if pq(tr)('th').filter(lambda i, this: pq(this).text() == 'Owner:'):
             tmp = pq(tr)('.userlink')
             for owner in tmp:
-                tmp = pq(owner).attr('href')
-                if tmp:
-                    oid = 'https://code.google.com{}'.format(tmp)
-                else:
-                    oid = pq(owner).contents()[0]
+                oid, owner = map_author(pq(owner))
                 if oid:
-                    try:
-                        authors[oid]
-                    except KeyError:
-                        authors[oid] = valid_email(oid)
-                    owner = authors[oid]
                     if owner:
                         issue['owner'] = {'email': owner}
                     issue['orig_owner'] = oid
@@ -385,19 +382,9 @@ def get_gcode_issue(issue_summary):
             if tmp:
                 issue['Cc'] = []
             for cc in tmp:
-                tmp = pq(cc).attr('href')
-                if tmp:
-                    cid = 'https://code.google.com{}'.format(tmp)
-                else:
-                    cid = pq(cc).contents()[0]
-                if cid:
-                    try:
-                        authors[cid]
-                    except KeyError:
-                        authors[cid] = valid_email(cid)
-                    cc = authors[cid]
-                    if cc:
-                        issue['Cc'].append({'email': cc})
+                cid, carbon = map_author(pq(cc))
+                if cid and carbon:
+                    issue['Cc'].append({'email': carbon})
             break
 
     issue['body'] = description('pre').text()
@@ -417,42 +404,32 @@ def get_gcode_issue(issue_summary):
             body = u'FIXME: UnicodeDecodeError'
             output("issue %d FIXME: UnicodeDecodeError\n" % (issue['number'] + (options.issues_start_from - 1)))
 
-        tmp = comment('.userlink').attr('href')
-        if tmp:
-            uid = 'https://code.google.com{}'.format(tmp)
-        else:
-            uid = comment('.userlink').contents()[0]
-        try:
-            authors[uid]
-        except KeyError:
-            authors[uid] = valid_email(uid)
-        if user:
-            user = authors[uid]
+        uid, user = map_author(comment('.userlink'))
+        if uid:
+            updates = comment('.updates .box-inner')
+            if updates:
+                body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
 
-        updates = comment('.updates .box-inner')
-        if updates:
-            body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
+            # Strip the placeholder text if there's any other updates
+            body = body.replace('(No comment was entered for this change.)\n\n', '')
 
-        # Strip the placeholder text if there's any other updates
-        body = body.replace('(No comment was entered for this change.)\n\n', '')
+            if body.find('**Status:** Fixed') >= 0:
+                issue['closed_at'] = date
 
-        if body.find('**Status:** Fixed') >= 0:
-            issue['closed_at'] = date
+            if re.match(r'^c([0-9]+)$', pq(comment)('a').attr('name')):
+                i = re.sub(r'^c([0-9]+)$', r'\1', pq(comment)('a').attr('name'), flags=re.DOTALL)
+            else:
+                i = str(len(issue['comments']) + 1)
+                output("issue %d FIXME: comment №%d\n" % (issue['number'] + (options.issues_start_from - 1), i))
 
-        if re.match(r'^c([0-9]+)$', pq(comment)('a').attr('name')):
-            i = re.sub(r'^c([0-9]+)$', r'\1', pq(comment)('a').attr('name'), flags=re.DOTALL)
-        else:
-            i = str(len(issue['comments']) + 1)
-            output("issue %d FIXME: comment №%d\n" % (issue['number'] + (options.issues_start_from - 1), i))
-
-        c = { 'created_at': date,
-              'user': {'email': user},
-              'body': body,
-              'link': issue['link'] + '#c' + str(i),
-              'orig_user': uid,
-              'updated_at': options.updated_at
-            }
-        issue['comments'].append(c)
+            c = { 'created_at': date,
+                  'user': {'email': user},
+                  'body': body,
+                  'link': issue['link'] + '#c' + str(i),
+                  'orig_user': uid,
+                  'updated_at': options.updated_at
+                }
+            issue['comments'].append(c)
 
     return issue
 
