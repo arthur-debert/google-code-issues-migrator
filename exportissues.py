@@ -282,7 +282,7 @@ def add_issue_to_github(issue):
         f.write('\n')
 
 
-def map_author(gc_userlink):
+def map_author(gc_userlink, kind=None):
     gc_uid = gc_userlink.text()
     if gc_uid:
         email_pat = gc_uid
@@ -300,8 +300,10 @@ def map_author(gc_userlink):
             for email, gh_user in matches:
                 output('\t{email}'.format(**locals()))
         elif matches:
+            output("{}\t   \t{} -> {}: {}\n".format(kind, gc_uid, *matches[0]))
             return matches[0]
 
+        output("{}\t!!!\t{}\n".format(kind, gc_uid))
         return gc_uid, None
 
     return None, None
@@ -368,7 +370,7 @@ def get_gcode_issue(issue_summary):
     doc = pq(opener.open(issue['link']).read())
 
     description = doc('.issuedescription .issuedescription')
-    uid, user = map_author(description('.userlink'))
+    uid, user = map_author(description('.userlink'), 'reporter')
     if uid:
         if user:
             issue['user'] = {'email': user}
@@ -379,7 +381,7 @@ def get_gcode_issue(issue_summary):
         if pq(tr)('th').filter(lambda i, this: pq(this).text() == 'Owner:'):
             tmp = pq(tr)('.userlink')
             for owner in tmp:
-                oid, owner = map_author(pq(owner))
+                oid, owner = map_author(pq(owner), 'owner')
                 if oid:
                     if owner:
                         issue['owner'] = {'email': owner}
@@ -392,7 +394,7 @@ def get_gcode_issue(issue_summary):
             if tmp:
                 issue['Cc'] = []
             for cc in tmp:
-                cid, carbon = map_author(pq(cc))
+                cid, carbon = map_author(pq(cc), 'cc')
                 if cid and carbon:
                     issue['Cc'].append({'email': carbon})
             break
@@ -414,7 +416,7 @@ def get_gcode_issue(issue_summary):
             body = u'FIXME: UnicodeDecodeError'
             output("issue %d FIXME: UnicodeDecodeError\n" % (issue['number'] + (options.issues_start_from - 1)))
 
-        uid, user = map_author(comment('.userlink'))
+        uid, user = map_author(comment('.userlink'), 'comment')
         if uid:
             updates = comment('.updates .box-inner')
             if updates:
