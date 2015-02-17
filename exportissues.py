@@ -300,10 +300,10 @@ def map_author(gc_userlink, kind=None):
             for email, gh_user in matches:
                 output('\t{email}'.format(**locals()))
         elif matches:
-            output("{}\t   \t{} -> {}: {}\n".format(kind, gc_uid, *matches[0]))
+            output("{:<10}    {:>22} -> {:>32}:   {:<16}\n".format(kind, gc_uid, *matches[0]))
             return matches[0]
 
-        output("{}\t!!!\t{}\n".format(kind, gc_uid))
+        output("{:<10}!!! {:>22}\n".format(kind, gc_uid))
         return gc_uid, None
 
     return None, None
