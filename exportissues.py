@@ -44,6 +44,14 @@ GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
 
 GOOGLE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
 
+# Format with (google_project_name, issue nr/re)
+GOOGLE_ISSUE_RE_TMPL = r'''(?x)
+    (?: (?: (?<= \*\*Blocking:\*\* )
+          | (?<= \*\*Blockedon:\*\* )
+          | (?<= \*\*Mergedinto:\*\* ) ) \s* (?:{0}:)?
+      | https?://code\.google\.com/p/{0}/issues/detail\?id=
+      | (?i) issue[ #]* ) ({1})'''
+
 # Mapping from Google Code issue labels to Github labels
 LABEL_MAPPING = {
     'Type-Defect' : 'bug',
@@ -88,36 +96,12 @@ def valid_email(s):
 
 
 def get_gc_issue(s):
-    reg = [ r'^.*\*\*Blockedon:\*\* ([0-9]{1,4}) .*$',
-            r'^.*\*\*Blocking:\*\* ([0-9]{1,4}) .*$',
-            r'^.*\*\*Blocking:\*\* ' + google_project_name + r':([0-9]{1,4}) .*$',
-            r'^.*\*\*Blockedon:\*\* ' + google_project_name + r':([0-9]{1,4}) .*$', ]
-    n = set()
-    for r in reg:
-        if re.match(r, s):
-            s1 = re.sub(r, r'\1', s, flags=re.DOTALL)
-        else:
-            continue
-        try:
-            i = int(s1)
-            n.add(i)
-        except ValueError:
-            pass
-    for i in set(re.findall(r'issue [0-9]+', s, re.DOTALL)):
-        s1 = re.sub(r'issue ([0-9]+)', r'\1', i)
-        n.add(int(s1))
-    return n
-
+    r = GOOGLE_ISSUE_RE_TMPL.format(google_project_name, r'[0-9]+')
+    return set(map(int, re.findall(r, s)))
 
 def fix_gc_issue_n(s, on, nn):
-    reg = [ r'(\*\*Blockedon:\*\*) ' + str(on),
-            r'(\*\*Blocking:\*\*) ' + str(on),
-            r'(\*\*Blocking:\*\*) ' + google_project_name + r':' + str(on),
-            r'(\*\*Blockedon:\*\*) ' + google_project_name + r':' +str(on),
-            r'(issue) ' + str(on) ]
-    for r in reg:
-        s = re.sub(r, r'\1 ' + str(nn), s)
-    return s
+    r = GOOGLE_ISSUE_RE_TMPL.format(google_project_name, on)
+    return re.sub(r, '#'+str(nn), s)
 
 
 def reindent(s, n=4):
