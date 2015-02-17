@@ -82,6 +82,16 @@ class Namespace(object):
         items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
         return "{}({})".format(type(self).__name__, ", ".join(items))
 
+class ExtraNamespace(Namespace):
+    """
+    Adds an extra namespace inaccessible through regular __dict__
+    """
+    __slots__ = 'extra'
+
+    def __init__(self, **kwargs):
+        super(ExtraNamespace, self).__init__()
+        self.__dict__.update(kwargs)
+        self.extra = Namespace()
 
 def write_json(obj, filename):
     def namespace_to_dict(obj):
@@ -169,13 +179,6 @@ def format_message(m, comment_nr=0):
     m.body = ''.join(filter_unicode(m.body))
     m.body, refs = fixup_refs(m.body)
 
-    if is_issue:
-        try:
-            oid = m.orig_owner
-            del m.orig_owner
-        except AttributeError:
-            oid = None
-
     if gt(m.created_at) >= MARKDOWN_DATE:
         if m.body.find("```") >= 0:
             m.body = reindent(m.body)
@@ -187,66 +190,59 @@ def format_message(m, comment_nr=0):
 
         if is_issue:
             m.body += ("Original issue for #" + str(m.number) + ": " +
-                          m.link + "\r\n" +
-                          "Original author: " + m.orig_user + "\r\n")
+                       m.extra.link + "\r\n" +
+                       "Original author: " + m.extra.orig_user + "\r\n")
         if refs:
             m.body += ("Referenced issues: " +
                               ", ".join("#" + str(i) for i in refs) + "\r\n")
         if is_issue:
-            if oid:
-                m.body += ("Original owner: " + oid + "\r\n")
+            if m.extra.orig_owner:
+                m.body += ("Original owner: " + m.extra.orig_owner + "\r\n")
         else:
-            m.body += ("Original comment: " + m.link + "\r\n")
-            m.body += ("Original author: " + m.orig_user + "\r\n")
+            m.body += ("Original comment: " + m.extra.link + "\r\n")
+            m.body += ("Original author: " + m.extra.orig_user + "\r\n")
 
     else:
         m.body = "bc.. " + m.body + "\r\n"
 
         if is_issue:
             m.body += ("\r\n" +
-                          "p. Original issue for " +
-                          i_tmpl.format(*[str(m.number)]*2) + ": " +
-                          '"' + m.link + '":' +
-                          m.link + "\r\n\r\n" +
-                          "p. Original author: " + '"' + m.orig_user +
-                          '":' + m.orig_user + "\r\n")
+                       "p. Original issue for " +
+                       i_tmpl.format(*[str(m.number)]*2) + ": " +
+                       '"' + m.extra.link + '":' +
+                       m.extra.link + "\r\n\r\n" +
+                       "p. Original author: " + '"' + m.extra.orig_user +
+                       '":' + m.extra.orig_user + "\r\n")
         if refs:
             m.body += ("\r\np. Referenced issues: " +
-                          ", ".join(i_tmpl.format(*[str(i)]*2) for i in refs) +
-                          "\r\n")
+                       ", ".join(i_tmpl.format(*[str(i)]*2) for i in refs) +
+                       "\r\n")
         if is_issue:
-            if oid:
+            if m.extra.orig_owner:
                 m.body += ("\r\np. Original owner: " +
-                              '"' + oid + '":' + oid + "\r\n")
+                           '"' + m.extra.orig_owner + '":' + m.extra.orig_owner + "\r\n")
         else:
-            m.body += ("\r\np. Original comment: " + '"' + m.link +
-                          '":' + m.link + "\r\n")
-            m.body += ("\r\np. Original author: " + '"' + m.orig_user +
-                          '":' + m.orig_user + "\r\n")
+            m.body += ("\r\np. Original comment: " + '"' + m.extra.link +
+                       '":' + m.extra.link + "\r\n")
+            m.body += ("\r\np. Original author: " + '"' + m.extra.orig_user +
+                       '":' + m.extra.orig_user + "\r\n")
 
     if len(m.body) >= 65534:
         m.body = "FIXME: too long issue body"
         output(" FIXME: too long {} body"
                .format('issue' if is_issue else 'comment '+comment_nr))
 
-    del m.orig_user
-    del m.link
-
 
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
-
     output('Exporting issue %d' % issue.number, level=1)
-
-    comments = issue.comments
-    del issue.comments
 
     format_message(issue)
     write_json(issue, "issues/{}.json".format(issue.number))
 
-    for i, comment in enumerate(comments):
+    for i, comment in enumerate(issue.extra.comments):
         format_message(comment, i+1)
-    write_json(comments, "issues/{}.comments.json".format(issue.number))
+    write_json(issue.extra.comments, "issues/{}.comments.json".format(issue.number))
 
 
 def map_author(gc_uid, kind=None):
@@ -281,24 +277,24 @@ def get_gcode_issue(issue_summary):
     output('Importing issue %d\n' % int(issue_summary['ID']), level=1)
 
     # Populate properties available from the summary CSV
-    issue = Namespace(
+    issue = ExtraNamespace(
         number     = int(issue_summary['ID']) + (options.issues_start_from - 1),
         title      = issue_summary['Summary'].replace('%', '&#37;'),
-        link       = GOOGLE_URL.format(google_project_name, issue_summary['ID']),
         state      = 'closed' if issue_summary['Closed'] else 'open',
         created_at = datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])).isoformat() + "Z",
         updated_at = options.updated_at)
-
-    oid, owner = map_author(issue_summary['Owner'], 'owner')
-    if oid:
-        if owner:
-            issue.assignee = owner
-        issue.orig_owner = oid
 
     issue.title = issue.title.strip()
     if not issue.title:
         issue.title = "FIXME: empty title"
         output(" FIXME: empty title")
+
+    if issue_summary['Owner']:
+        issue.extra.orig_owner, issue.assignee = map_author(issue_summary['Owner'], 'owner')
+    else:
+        issue.extra.orig_owner = issue.assignee = None
+
+    issue.extra.link = GOOGLE_URL.format(google_project_name, issue_summary['ID'])
 
     global mnum
     global milestones
@@ -322,7 +318,7 @@ def get_gcode_issue(issue_summary):
             try:
                 milestones[ms]
             except KeyError:
-                milestones[ms] = Namespace(
+                milestones[ms] = ExtraNamespace(
                    number     = mnum + (options.milestones_start_from - 1),
                    state      = 'open',
                    title      = ms,
@@ -339,58 +335,58 @@ def get_gcode_issue(issue_summary):
 
     # Scrape the issue details page for the issue body and comments
     opener = urllib2.build_opener()
-    doc = pq(opener.open(issue.link).read())
+    doc = pq(opener.open(issue.extra.link).read())
 
-    description = doc('.issuedescription .issuedescription')
-    uid, user = map_author(description('.userlink').text(), 'reporter')
-    if uid:
-        if user:
-            issue.user = user
-        issue.orig_user = uid
+    issue_pq = doc('.issuedescription .issuedescription')
+    issue.extra.orig_user, user = map_author(issue_pq('.userlink').text(), 'reporter')
+    if user:
+        issue.user = user
 
-    issue.body = description('pre').text()
+    issue.body = issue_pq('pre').text()
 
-    issue.comments = []
-    for comment in doc('.issuecomment'):
-        comment = pq(comment)
-        if not comment('.date'):
+    issue.extra.comments = []
+    for comment_pq in map(pq, doc('.issuecomment')):
+        if not comment_pq('.date'):
             continue # Sign in prompt line uses same class
-        if comment.hasClass('delcom'):
+        if comment_pq.hasClass('delcom'):
             continue # Skip deleted comments
 
-        date = parse_gcode_date(comment('.date').attr('title'))
+        date = parse_gcode_date(comment_pq('.date').attr('title'))
         try:
-            body = comment('pre').text()
+            body = comment_pq('pre').text()
         except UnicodeDecodeError:
             body = u'FIXME: UnicodeDecodeError'
             output("issue %d FIXME: UnicodeDecodeError\n" % issue.number)
 
-        uid, user = map_author(comment('.userlink').text(), 'comment')
-        if uid:
-            updates = comment('.updates .box-inner')
-            if updates:
-                body += '\n\n' + updates.html().strip().replace('\n', '').replace('<b>', '**').replace('</b>', '**').replace('<br/>', '\n')
+        updates = comment_pq('.updates .box-inner')
+        if updates:
+            body += ('\n\n' + updates.html().strip()
+                     .replace('\n', '').replace('<br/>', '\n')
+                     .replace('<b>', '**').replace('</b>', '**'))
 
-            # Strip the placeholder text if there's any other updates
-            body = body.replace('(No comment was entered for this change.)\n\n', '')
+        # Strip the placeholder text if there's any other updates
+        body = body.replace('(No comment was entered for this change.)\n\n', '')
 
-            if body.find('**Status:** Fixed') >= 0:
-                issue.closed_at = date
+        if body.find('**Status:** Fixed') >= 0:
+            issue.closed_at = date
 
-            if re.match(r'^c([0-9]+)$', pq(comment)('a').attr('name')):
-                i = re.sub(r'^c([0-9]+)$', r'\1', pq(comment)('a').attr('name'), flags=re.DOTALL)
-            else:
-                i = str(len(issue.comments) + 1)
-                output("issue %d FIXME: comment №%d\n" % (issue.number, i))
+        if re.match(r'^c([0-9]+)$', comment_pq('a').attr('name')):
+            i = re.sub(r'^c([0-9]+)$', r'\1', comment_pq('a').attr('name'), flags=re.DOTALL)
+        else:
+            i = str(len(issue.extra.comments) + 1)
+            output("issue %d FIXME: comment №%d\n" % (issue.number, i))
 
-            comment = Namespace(
-                created_at = date,
-                user       = user,
-                body       = body,
-                link       = issue.link + '#c' + str(i),
-                orig_user  = uid,
-                updated_at = options.updated_at)
-            issue.comments.append(comment)
+        comment = ExtraNamespace(
+            body       = body,
+            created_at = date,
+            updated_at = options.updated_at)
+
+        comment.extra.orig_user, user = map_author(comment_pq('.userlink').text(), 'comment')
+        if user:
+            comment.user = user
+
+        comment.extra.link = issue.extra.link + '#c' + str(i)
+        issue.extra.comments.append(comment)
 
     return issue
 
