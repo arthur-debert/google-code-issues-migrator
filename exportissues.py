@@ -236,40 +236,20 @@ def format_message(m, comment_nr=0):
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
-    gid = issue.number
-    gid += (options.issues_start_from - 1)
+    output('Exporting issue %d' % issue.number, level=1)
 
-    output('Exporting issue %d' % gid, level=1)
-
-    issue.number = gid
-    try:
-        issue.milestone += (options.milestones_start_from - 1)
-    except AttributeError:
-        pass
-    issue.title = issue.title.strip()
-    if not issue.title:
-        issue.title = "FIXME: empty title"
-        output(" FIXME: empty title")
     comments = issue.comments
     del issue.comments
-    del issue.status
-    try:
-        if issue.owner:
-            issue.assignee = issue.owner
-        del issue.owner
-    except AttributeError:
-        pass
 
     format_message(issue)
-    write_json(issue, "issues/{}.json".format(gid))
+    write_json(issue, "issues/{}.json".format(issue.number))
 
     for i, comment in enumerate(comments):
         format_message(comment, i+1)
-    write_json(comments, "issues/{}.comments.json".format(gid))
+    write_json(comments, "issues/{}.comments.json".format(issue.number))
 
 
-def map_author(gc_userlink, kind=None):
-    gc_uid = gc_userlink.text()
+def map_author(gc_uid, kind=None):
     if gc_uid:
         email_pat = gc_uid
         if '@' not in email_pat:
@@ -302,14 +282,23 @@ def get_gcode_issue(issue_summary):
 
     # Populate properties available from the summary CSV
     issue = Namespace(
-        number     = int(issue_summary['ID']),
+        number     = int(issue_summary['ID']) + (options.issues_start_from - 1),
         title      = issue_summary['Summary'].replace('%', '&#37;'),
         link       = GOOGLE_URL.format(google_project_name, issue_summary['ID']),
-        owner      = issue_summary['Owner'],
         state      = 'closed' if issue_summary['Closed'] else 'open',
         created_at = datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])).isoformat() + "Z",
-        status     = issue_summary['Status'].lower(),
         updated_at = options.updated_at)
+
+    oid, owner = map_author(issue_summary['Owner'], 'owner')
+    if oid:
+        if owner:
+            issue.assignee = owner
+        issue.orig_owner = oid
+
+    issue.title = issue.title.strip()
+    if not issue.title:
+        issue.title = "FIXME: empty title"
+        output(" FIXME: empty title")
 
     global mnum
     global milestones
@@ -334,7 +323,7 @@ def get_gcode_issue(issue_summary):
                 milestones[ms]
             except KeyError:
                 milestones[ms] = Namespace(
-                   number     = mnum,
+                   number     = mnum + (options.milestones_start_from - 1),
                    state      = 'open',
                    title      = ms,
                    created_at = issue.created_at)
@@ -342,8 +331,9 @@ def get_gcode_issue(issue_summary):
             issue.milestone = milestones[ms].number
 
     # Add additional labels based on the issue's state
-    if issue.status in STATE_MAPPING:
-        labels.append(STATE_MAPPING[issue.status])
+    status = issue_summary['Status'].lower()
+    if status in STATE_MAPPING:
+        labels.append(STATE_MAPPING[status])
 
     issue.labels = labels
 
@@ -352,24 +342,11 @@ def get_gcode_issue(issue_summary):
     doc = pq(opener.open(issue.link).read())
 
     description = doc('.issuedescription .issuedescription')
-    uid, user = map_author(description('.userlink'), 'reporter')
+    uid, user = map_author(description('.userlink').text(), 'reporter')
     if uid:
         if user:
             issue.user = user
         issue.orig_user = uid
-
-    # Handle Owner field...
-    for tr in doc('div[id="meta-float"]')('tr'):
-        if pq(tr)('th').filter(lambda i, this: pq(this).text() == 'Owner:'):
-            tmp = pq(tr)('.userlink')
-            for owner in tmp:
-                oid, owner = map_author(pq(owner), 'owner')
-                if oid:
-                    if owner:
-                        issue.owner = owner
-                    issue.orig_owner = oid
-                    break # only one owner
-            break
 
     issue.body = description('pre').text()
 
@@ -386,9 +363,9 @@ def get_gcode_issue(issue_summary):
             body = comment('pre').text()
         except UnicodeDecodeError:
             body = u'FIXME: UnicodeDecodeError'
-            output("issue %d FIXME: UnicodeDecodeError\n" % (issue.number + (options.issues_start_from - 1)))
+            output("issue %d FIXME: UnicodeDecodeError\n" % issue.number)
 
-        uid, user = map_author(comment('.userlink'), 'comment')
+        uid, user = map_author(comment('.userlink').text(), 'comment')
         if uid:
             updates = comment('.updates .box-inner')
             if updates:
@@ -404,7 +381,7 @@ def get_gcode_issue(issue_summary):
                 i = re.sub(r'^c([0-9]+)$', r'\1', pq(comment)('a').attr('name'), flags=re.DOTALL)
             else:
                 i = str(len(issue.comments) + 1)
-                output("issue %d FIXME: comment №%d\n" % (issue.number + (options.issues_start_from - 1), i))
+                output("issue %d FIXME: comment №%d\n" % (issue.number, i))
 
             comment = Namespace(
                 created_at = date,
@@ -458,7 +435,6 @@ def process_gcode_issues():
 
     if milestones:
         for m in milestones.values():
-            m.number += (options.milestones_start_from - 1)
             output('Adding milestone %d' % m.number, level=1)
             write_json(m, 'milestones/{}.json'.format(m.number))
             output('\n', level=1)
