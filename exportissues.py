@@ -178,55 +178,55 @@ def add_issue_to_github(issue):
         i_tmpl = '"#{}":' + options.issues_link + '/{}'
 
     c_idx = set()
-    with open("issues/" + str(issue['number']) + ".comments.json", "w") as f:
-        comments_fixed = list(comments)
-        for i, c in enumerate(comments):
-            c_i = get_gc_issue(c['body'])
-            if c_i:
-                for i in c_i:
-                    nn = i + (options.issues_start_from - 1)
-                    c['body'] = fix_gc_issue_n(c['body'], i, nn)
-                c_i = set(i + (options.issues_start_from - 1) for i in c_i)
-                c_idx |= c_i
-            body = ""
-            for s in c['body']:
-                if s >= u"\uffff":
-                    body += "FIXME: unicode %s" % hex(ord(s))
-                    output(" FIXME: unicode %s" % hex(ord(s)))
-                else:
-                    body += s
-            c['body'] = body
-
-            if len(c['body']) >= 65534:
-                c['body'] = "FIXME: too long comment body"
-                output(" FIXME: comment %d - too long body" % i + 1)
-
-            if gt(c['created_at']) >= markdown_date:
-                if c['body'].find("```") >= 0:
-                    c['body'] = reindent(c['body'])
-                    output(" FIXME: triple quotes in c%s" % str(i))
-                else:
-                    c['body'] = "```\r\n" + c['body'] + "\r\n```"
-                c['body'] += "\r\n"
-                if c_i:
-                    c['body'] += ("Referenced issues: " +
-                                  ", ".join("#" + str(i) for i in c_i) + "\r\n")
-                c['body'] += ("Original comment: " + c['link'] + "\r\n")
-                c['body'] += ("Original author: " + c['orig_user'] + "\r\n")
+    comments_fixed = list(comments)
+    for i, c in enumerate(comments):
+        c_i = get_gc_issue(c['body'])
+        if c_i:
+            for i in c_i:
+                nn = i + (options.issues_start_from - 1)
+                c['body'] = fix_gc_issue_n(c['body'], i, nn)
+            c_i = set(i + (options.issues_start_from - 1) for i in c_i)
+            c_idx |= c_i
+        body = ""
+        for s in c['body']:
+            if s >= u"\uffff":
+                body += "FIXME: unicode %s" % hex(ord(s))
+                output(" FIXME: unicode %s" % hex(ord(s)))
             else:
-                c['body'] = "bc.. " + c['body'] + "\r\n"
-                if c_i:
-                    c['body'] += ("\r\np. Referenced issues: " +
-                                  ", ".join(i_tmpl.format(*[str(i)]*2) for i in c_i) + "\r\n")
-                c['body'] += ("\r\np. Original comment: " + '"' + c['link'] +
-                              '":' + c['link'] + "\r\n")
-                c['body'] += ("\r\np. Original author: " + '"' + c['orig_user'] +
-                              '":' + c['orig_user'] + "\r\n")
-            del c['link']
-            del c['orig_user']
+                body += s
+        c['body'] = body
 
-        comments = comments_fixed
+        if len(c['body']) >= 65534:
+            c['body'] = "FIXME: too long comment body"
+            output(" FIXME: comment %d - too long body" % i + 1)
 
+        if gt(c['created_at']) >= markdown_date:
+            if c['body'].find("```") >= 0:
+                c['body'] = reindent(c['body'])
+                output(" FIXME: triple quotes in c%s" % str(i))
+            else:
+                c['body'] = "```\r\n" + c['body'] + "\r\n```"
+            c['body'] += "\r\n"
+            if c_i:
+                c['body'] += ("Referenced issues: " +
+                              ", ".join("#" + str(i) for i in c_i) + "\r\n")
+            c['body'] += ("Original comment: " + c['link'] + "\r\n")
+            c['body'] += ("Original author: " + c['orig_user'] + "\r\n")
+        else:
+            c['body'] = "bc.. " + c['body'] + "\r\n"
+            if c_i:
+                c['body'] += ("\r\np. Referenced issues: " +
+                              ", ".join(i_tmpl.format(*[str(i)]*2) for i in c_i) + "\r\n")
+            c['body'] += ("\r\np. Original comment: " + '"' + c['link'] +
+                          '":' + c['link'] + "\r\n")
+            c['body'] += ("\r\np. Original author: " + '"' + c['orig_user'] +
+                          '":' + c['orig_user'] + "\r\n")
+        del c['link']
+        del c['orig_user']
+
+    comments = comments_fixed
+
+    with open("issues/" + str(issue['number']) + ".comments.json", "w") as f:
         f.write(json.dumps(comments, indent=4, separators=(',', ': '), sort_keys=True))
         f.write('\n')
 
