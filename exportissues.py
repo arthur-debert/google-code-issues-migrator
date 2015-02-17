@@ -37,9 +37,6 @@ GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
             'Opened',
             'Closed',
             'Reporter',
-            'BlockedOn',
-            'Blocking',
-            'MergedInto',
         ]))
 
 GOOGLE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
@@ -257,17 +254,9 @@ def add_issue_to_github(issue):
     del issue.comments
     del issue.status
     try:
-        del issue.Cc
-    except AttributeError:
-        pass
-    try:
         if issue.owner:
             issue.assignee = issue.owner
         del issue.owner
-    except AttributeError:
-        pass
-    try:
-        del issue.references
     except AttributeError:
         pass
 
@@ -322,14 +311,6 @@ def get_gcode_issue(issue_summary):
         status     = issue_summary['Status'].lower(),
         updated_at = options.updated_at)
 
-    refs = set()
-    for k in ['BlockedOn', 'Blocking', 'MergedInto']:
-        b = issue_summary[k]
-        if b:
-            refs |= set(map(int, b.split(',')))
-    if refs:
-        issue.references = refs
-
     global mnum
     global milestones
 
@@ -377,7 +358,7 @@ def get_gcode_issue(issue_summary):
             issue.user = user
         issue.orig_user = uid
 
-    # Handle Owner and Cc fields...
+    # Handle Owner field...
     for tr in doc('div[id="meta-float"]')('tr'):
         if pq(tr)('th').filter(lambda i, this: pq(this).text() == 'Owner:'):
             tmp = pq(tr)('.userlink')
@@ -388,16 +369,6 @@ def get_gcode_issue(issue_summary):
                         issue.owner = owner
                     issue.orig_owner = oid
                     break # only one owner
-            break
-    for tr in doc('div[id="meta-float"]')('tr'):
-        if pq(tr)('th').filter(lambda i, this: pq(this).text() == 'Cc:'):
-            tmp = pq(tr)('.userlink')
-            if tmp:
-                issue.Cc = []
-            for cc in tmp:
-                cid, carbon = map_author(pq(cc), 'cc')
-                if cid and carbon:
-                    issue.Cc.append(carbon)
             break
 
     issue.body = description('pre').text()
