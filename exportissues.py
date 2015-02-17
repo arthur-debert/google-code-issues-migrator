@@ -66,9 +66,10 @@ STATE_MAPPING = {
     'wontfix': 'wontfix'
 }
 
-def output(string):
-    sys.stdout.write(string)
-    sys.stdout.flush()
+def output(string, level=0):
+    if options.verbose >= level:
+        sys.stdout.write(string)
+        sys.stdout.flush()
 
 
 def parse_gcode_date(date_text):
@@ -114,7 +115,7 @@ def add_issue_to_github(issue):
     gid = issue['number']
     gid += (options.issues_start_from - 1)
 
-    output('Adding issue %d' % gid)
+    output('Exporting issue %d' % gid, level=1)
 
     issue['number'] = gid
     try:
@@ -297,15 +298,20 @@ def map_author(gc_userlink, kind=None):
             for email, gh_user in matches:
                 output('\t{email}'.format(**locals()))
         elif matches:
-            output("{:<10}    {:>22} -> {:>32}:   {:<16}\n".format(kind, gc_uid, *matches[0]))
+            if options.verbose > 1:
+                output("{:<10}    {:>22} -> {:>32}:   {:<16}\n"
+                       .format(kind, gc_uid, *matches[0]), level=2)
             return matches[0]
 
-        output("{:<10}!!! {:>22}\n".format(kind, gc_uid))
+        if options.verbose > 1:
+            output("{:<10}!!! {:>22}\n".format(kind, gc_uid), level=2)
         return gc_uid, None
 
     return None, None
 
 def get_gcode_issue(issue_summary):
+    output('Importing issue %d\n' % int(issue_summary['ID']), level=1)
+
     # Populate properties available from the summary CSV
     issue = {
         'number': int(issue_summary['ID']),
@@ -466,11 +472,11 @@ def process_gcode_issues():
     if options.start_at is not None:
         issues = [x for x in issues if int(x['ID']) >= options.start_at]
         previous_gid = options.start_at - 1
-        output('Starting at issue %d\n' % options.start_at)
+        output('Starting at issue %d\n' % options.start_at, level=1)
 
     if options.end_at is not None:
         issues = [x for x in issues if int(x['ID']) <= options.end_at]
-        output('End at issue %d\n' % options.end_at)
+        output('End at issue %d\n' % options.end_at, level=1)
 
     for issue in issues:
         issue = get_gcode_issue(issue)
@@ -479,17 +485,16 @@ def process_gcode_issues():
             continue
 
         add_issue_to_github(issue)
-
-        output('\n')
+        output('\n', level=1)
 
     if milestones:
         for m in milestones.values():
             m['number'] += (options.milestones_start_from - 1)
             with open('milestones/' + str(m['number']) + '.json', 'w') as f:
-                output('Adding milestone %d' % m['number'])
+                output('Adding milestone %d' % m['number'], level=1)
                 f.write(json.dumps(m, indent=4, separators=(',', ': '), sort_keys=True))
                 f.write('\n')
-                output('\n')
+                output('\n', level=1)
 
 
 if __name__ == "__main__":
@@ -506,6 +511,10 @@ if __name__ == "__main__":
     parser.add_option('--milestones-start-from', dest = 'milestones_start_from', help = 'First milestone number', default = 1, type = int)
     parser.add_option('--issues-link', dest = 'issues_link', help = 'Full link to issues page in the new repo', default = None, type = str)
     parser.add_option('--export-date', dest = 'updated_at', help = 'Date of export', default = None, type = str)
+    parser.add_option("-s", "--silent", action = "store_false", dest = "verbose",
+                      help = "Output critical messages only")
+    parser.add_option("-v", "--verbose", action = "count", dest = "verbose",
+                      help = "Verbosity level (-v to -vvv)", default = 1)
 
     options, args = parser.parse_args()
 
