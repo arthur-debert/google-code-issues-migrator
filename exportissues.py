@@ -66,15 +66,41 @@ STATE_MAPPING = {
     'wontfix': 'wontfix'
 }
 
+
+class Namespace(object):
+    """
+    Backport of SimpleNamespace() class added in Python 3.3
+    """
+
+    def __init__(self, **kwargs):
+        super(Namespace, self).__init__()
+        self.__dict__.update(kwargs)
+
+    __hash__ = None
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self):
+        keys = sorted(self.__dict__)
+        items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
+        return "{}({})".format(type(self).__name__, ", ".join(items))
+
+
+def write_json(obj, filename):
+    def namespace_to_dict(obj):
+        if isinstance(obj, Namespace):
+            return obj.__dict__
+        raise TypeError("{} is not JSON serializable".format(obj))
+
+    with open(filename, "w") as fp:
+        json.dump(obj, fp, indent=4, separators=(',', ': '), sort_keys=True,
+                  default=namespace_to_dict)
+        fp.write('\n')
+
 def output(string, level=0):
     if options.verbose >= level:
         sys.stdout.write(string)
         sys.stdout.flush()
-
-def write_json(obj, filename):
-    with open(filename, "w") as fp:
-        json.dump(obj, fp, indent=4, separators=(',', ': '), sort_keys=True)
-        fp.write('\n')
 
 
 def parse_gcode_date(date_text):
@@ -143,106 +169,106 @@ def format_message(m, comment_nr=0):
     if options.issues_link:
         i_tmpl += ':' + options.issues_link + '/{}'
 
-    m['body'] = ''.join(filter_unicode(m['body']))
-    m['body'], refs = fixup_refs(m['body'])
+    m.body = ''.join(filter_unicode(m.body))
+    m.body, refs = fixup_refs(m.body)
 
     if is_issue:
         try:
-            oid = m['orig_owner']
-            del m['orig_owner']
-        except KeyError:
+            oid = m.orig_owner
+            del m.orig_owner
+        except AttributeError:
             oid = None
 
-    if gt(m['created_at']) >= MARKDOWN_DATE:
-        if m['body'].find("```") >= 0:
-            m['body'] = reindent(m['body'])
+    if gt(m.created_at) >= MARKDOWN_DATE:
+        if m.body.find("```") >= 0:
+            m.body = reindent(m.body)
             output(" FIXME: triple quotes in {} body"
                    .format('issue' if is_issue else 'comment '+comment_nr))
         else:
-            m['body'] = "```\r\n" + m['body'] + "\r\n```"
-        m['body'] += "\r\n"
+            m.body = "```\r\n" + m.body + "\r\n```"
+        m.body += "\r\n"
 
         if is_issue:
-            m['body'] += ("Original issue for #" + str(m['number']) + ": " +
-                          m['link'] + "\r\n" +
-                          "Original author: " + m['orig_user'] + "\r\n")
+            m.body += ("Original issue for #" + str(m.number) + ": " +
+                          m.link + "\r\n" +
+                          "Original author: " + m.orig_user + "\r\n")
         if refs:
-            m['body'] += ("Referenced issues: " +
+            m.body += ("Referenced issues: " +
                               ", ".join("#" + str(i) for i in refs) + "\r\n")
         if is_issue:
             if oid:
-                m['body'] += ("Original owner: " + oid + "\r\n")
+                m.body += ("Original owner: " + oid + "\r\n")
         else:
-            m['body'] += ("Original comment: " + m['link'] + "\r\n")
-            m['body'] += ("Original author: " + m['orig_user'] + "\r\n")
+            m.body += ("Original comment: " + m.link + "\r\n")
+            m.body += ("Original author: " + m.orig_user + "\r\n")
 
     else:
-        m['body'] = "bc.. " + m['body'] + "\r\n"
+        m.body = "bc.. " + m.body + "\r\n"
 
         if is_issue:
-            m['body'] += ("\r\n" +
+            m.body += ("\r\n" +
                           "p. Original issue for " +
-                          i_tmpl.format(*[str(m['number'])]*2) + ": " +
-                          '"' + m['link'] + '":' +
-                          m['link'] + "\r\n\r\n" +
-                          "p. Original author: " + '"' + m['orig_user'] +
-                          '":' + m['orig_user'] + "\r\n")
+                          i_tmpl.format(*[str(m.number)]*2) + ": " +
+                          '"' + m.link + '":' +
+                          m.link + "\r\n\r\n" +
+                          "p. Original author: " + '"' + m.orig_user +
+                          '":' + m.orig_user + "\r\n")
         if refs:
-            m['body'] += ("\r\np. Referenced issues: " +
+            m.body += ("\r\np. Referenced issues: " +
                           ", ".join(i_tmpl.format(*[str(i)]*2) for i in refs) +
                           "\r\n")
         if is_issue:
             if oid:
-                m['body'] += ("\r\np. Original owner: " +
+                m.body += ("\r\np. Original owner: " +
                               '"' + oid + '":' + oid + "\r\n")
         else:
-            m['body'] += ("\r\np. Original comment: " + '"' + m['link'] +
-                          '":' + m['link'] + "\r\n")
-            m['body'] += ("\r\np. Original author: " + '"' + m['orig_user'] +
-                          '":' + m['orig_user'] + "\r\n")
+            m.body += ("\r\np. Original comment: " + '"' + m.link +
+                          '":' + m.link + "\r\n")
+            m.body += ("\r\np. Original author: " + '"' + m.orig_user +
+                          '":' + m.orig_user + "\r\n")
 
-    if len(m['body']) >= 65534:
-        m['body'] = "FIXME: too long issue body"
+    if len(m.body) >= 65534:
+        m.body = "FIXME: too long issue body"
         output(" FIXME: too long {} body"
                .format('issue' if is_issue else 'comment '+comment_nr))
 
-    del m['orig_user']
-    del m['link']
+    del m.orig_user
+    del m.link
 
 
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
 
-    gid = issue['number']
+    gid = issue.number
     gid += (options.issues_start_from - 1)
 
     output('Exporting issue %d' % gid, level=1)
 
-    issue['number'] = gid
+    issue.number = gid
     try:
-        issue['milestone'] += (options.milestones_start_from - 1)
-    except KeyError:
+        issue.milestone += (options.milestones_start_from - 1)
+    except AttributeError:
         pass
-    issue['title'] = issue['title'].strip()
-    if not issue['title']:
-        issue['title'] = "FIXME: empty title"
+    issue.title = issue.title.strip()
+    if not issue.title:
+        issue.title = "FIXME: empty title"
         output(" FIXME: empty title")
-    comments = issue['comments']
-    del issue['comments']
-    del issue['status']
+    comments = issue.comments
+    del issue.comments
+    del issue.status
     try:
-        del issue['Cc']
-    except KeyError:
+        del issue.Cc
+    except AttributeError:
         pass
     try:
-        if issue['owner']:
-            issue['assignee'] = issue['owner']
-        del issue['owner']
-    except KeyError:
+        if issue.owner:
+            issue.assignee = issue.owner
+        del issue.owner
+    except AttributeError:
         pass
     try:
-        del issue['references']
-    except KeyError:
+        del issue.references
+    except AttributeError:
         pass
 
     format_message(issue)
@@ -286,16 +312,15 @@ def get_gcode_issue(issue_summary):
     output('Importing issue %d\n' % int(issue_summary['ID']), level=1)
 
     # Populate properties available from the summary CSV
-    issue = {
-        'number': int(issue_summary['ID']),
-        'title': issue_summary['Summary'].replace('%', '&#37;'),
-        'link': GOOGLE_URL.format(google_project_name, issue_summary['ID']),
-        'owner': issue_summary['Owner'],
-        'state': 'closed' if issue_summary['Closed'] else 'open',
-        'created_at': datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])).isoformat() + "Z",
-        'status': issue_summary['Status'].lower(),
-        'updated_at': options.updated_at
-    }
+    issue = Namespace(
+        number     = int(issue_summary['ID']),
+        title      = issue_summary['Summary'].replace('%', '&#37;'),
+        link       = GOOGLE_URL.format(google_project_name, issue_summary['ID']),
+        owner      = issue_summary['Owner'],
+        state      = 'closed' if issue_summary['Closed'] else 'open',
+        created_at = datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])).isoformat() + "Z",
+        status     = issue_summary['Status'].lower(),
+        updated_at = options.updated_at)
 
     refs = set()
     for k in ['BlockedOn', 'Blocking', 'MergedInto']:
@@ -303,7 +328,7 @@ def get_gcode_issue(issue_summary):
         if b:
             refs |= set(map(int, b.split(',')))
     if refs:
-        issue['references'] = refs
+        issue.references = refs
 
     global mnum
     global milestones
@@ -327,30 +352,30 @@ def get_gcode_issue(issue_summary):
             try:
                 milestones[ms]
             except KeyError:
-                milestones[ms] = {'number': mnum,
-                                  'state': 'open',
-                                  'title': ms,
-                                  'created_at': issue['created_at']
-                                  }
+                milestones[ms] = Namespace(
+                   number     = mnum,
+                   state      = 'open',
+                   title      = ms,
+                   created_at = issue.created_at)
                 mnum += 1
-            issue['milestone'] = milestones[ms]['number']
+            issue.milestone = milestones[ms].number
 
     # Add additional labels based on the issue's state
-    if issue['status'] in STATE_MAPPING:
-        labels.append(STATE_MAPPING[issue['status']])
+    if issue.status in STATE_MAPPING:
+        labels.append(STATE_MAPPING[issue.status])
 
-    issue['labels'] = labels
+    issue.labels = labels
 
     # Scrape the issue details page for the issue body and comments
     opener = urllib2.build_opener()
-    doc = pq(opener.open(issue['link']).read())
+    doc = pq(opener.open(issue.link).read())
 
     description = doc('.issuedescription .issuedescription')
     uid, user = map_author(description('.userlink'), 'reporter')
     if uid:
         if user:
-            issue['user'] = {'email': user}
-        issue['orig_user'] = uid
+            issue.user = {'email': user}
+        issue.orig_user = uid
 
     # Handle Owner and Cc fields...
     for tr in doc('div[id="meta-float"]')('tr'):
@@ -360,24 +385,24 @@ def get_gcode_issue(issue_summary):
                 oid, owner = map_author(pq(owner), 'owner')
                 if oid:
                     if owner:
-                        issue['owner'] = {'email': owner}
-                    issue['orig_owner'] = oid
+                        issue.owner = {'email': owner}
+                    issue.orig_owner = oid
                     break # only one owner
             break
     for tr in doc('div[id="meta-float"]')('tr'):
         if pq(tr)('th').filter(lambda i, this: pq(this).text() == 'Cc:'):
             tmp = pq(tr)('.userlink')
             if tmp:
-                issue['Cc'] = []
+                issue.Cc = []
             for cc in tmp:
                 cid, carbon = map_author(pq(cc), 'cc')
                 if cid and carbon:
-                    issue['Cc'].append({'email': carbon})
+                    issue.Cc.append({'email': carbon})
             break
 
-    issue['body'] = description('pre').text()
+    issue.body = description('pre').text()
 
-    issue['comments'] = []
+    issue.comments = []
     for comment in doc('.issuecomment'):
         comment = pq(comment)
         if not comment('.date'):
@@ -390,7 +415,7 @@ def get_gcode_issue(issue_summary):
             body = comment('pre').text()
         except UnicodeDecodeError:
             body = u'FIXME: UnicodeDecodeError'
-            output("issue %d FIXME: UnicodeDecodeError\n" % (issue['number'] + (options.issues_start_from - 1)))
+            output("issue %d FIXME: UnicodeDecodeError\n" % (issue.number + (options.issues_start_from - 1)))
 
         uid, user = map_author(comment('.userlink'), 'comment')
         if uid:
@@ -402,22 +427,22 @@ def get_gcode_issue(issue_summary):
             body = body.replace('(No comment was entered for this change.)\n\n', '')
 
             if body.find('**Status:** Fixed') >= 0:
-                issue['closed_at'] = date
+                issue.closed_at = date
 
             if re.match(r'^c([0-9]+)$', pq(comment)('a').attr('name')):
                 i = re.sub(r'^c([0-9]+)$', r'\1', pq(comment)('a').attr('name'), flags=re.DOTALL)
             else:
-                i = str(len(issue['comments']) + 1)
-                output("issue %d FIXME: comment №%d\n" % (issue['number'] + (options.issues_start_from - 1), i))
+                i = str(len(issue.comments) + 1)
+                output("issue %d FIXME: comment №%d\n" % (issue.number + (options.issues_start_from - 1), i))
 
-            c = { 'created_at': date,
-                  'user': {'email': user},
-                  'body': body,
-                  'link': issue['link'] + '#c' + str(i),
-                  'orig_user': uid,
-                  'updated_at': options.updated_at
-                }
-            issue['comments'].append(c)
+            comment = Namespace(
+                created_at = date,
+                user       = {'email': user},
+                body       = body,
+                link       = issue.link + '#c' + str(i),
+                orig_user  = uid,
+                updated_at = options.updated_at)
+            issue.comments.append(comment)
 
     return issue
 
@@ -451,10 +476,10 @@ def process_gcode_issues():
         issues = [x for x in issues if int(x['ID']) <= options.end_at]
         output('End at issue %d\n' % options.end_at, level=1)
 
-    for issue in issues:
-        issue = get_gcode_issue(issue)
+    for issue_summary in issues:
+        issue = get_gcode_issue(issue_summary)
 
-        if options.skip_closed and (issue['state'] == 'closed'):
+        if options.skip_closed and (issue.state == 'closed'):
             continue
 
         add_issue_to_github(issue)
@@ -462,12 +487,10 @@ def process_gcode_issues():
 
     if milestones:
         for m in milestones.values():
-            m['number'] += (options.milestones_start_from - 1)
-            with open('milestones/' + str(m['number']) + '.json', 'w') as f:
-                output('Adding milestone %d' % m['number'], level=1)
-                f.write(json.dumps(m, indent=4, separators=(',', ': '), sort_keys=True))
-                f.write('\n')
-                output('\n', level=1)
+            m.number += (options.milestones_start_from - 1)
+            output('Adding milestone %d' % m.number, level=1)
+            write_json(m, 'milestones/{}.json'.format(m.number))
+            output('\n', level=1)
 
 
 if __name__ == "__main__":
