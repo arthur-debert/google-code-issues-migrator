@@ -374,7 +374,7 @@ def get_gcode_issue(issue_summary):
     uid, user = map_author(description('.userlink'), 'reporter')
     if uid:
         if user:
-            issue.user = {'email': user}
+            issue.user = user
         issue.orig_user = uid
 
     # Handle Owner and Cc fields...
@@ -385,7 +385,7 @@ def get_gcode_issue(issue_summary):
                 oid, owner = map_author(pq(owner), 'owner')
                 if oid:
                     if owner:
-                        issue.owner = {'email': owner}
+                        issue.owner = owner
                     issue.orig_owner = oid
                     break # only one owner
             break
@@ -397,7 +397,7 @@ def get_gcode_issue(issue_summary):
             for cc in tmp:
                 cid, carbon = map_author(pq(cc), 'cc')
                 if cid and carbon:
-                    issue.Cc.append({'email': carbon})
+                    issue.Cc.append(carbon)
             break
 
     issue.body = description('pre').text()
@@ -437,7 +437,7 @@ def get_gcode_issue(issue_summary):
 
             comment = Namespace(
                 created_at = date,
-                user       = {'email': user},
+                user       = user,
                 body       = body,
                 link       = issue.link + '#c' + str(i),
                 orig_user  = uid,
