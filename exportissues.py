@@ -39,6 +39,7 @@ GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
             'Reporter',
             'BlockedOn',
             'Blocking',
+            'MergedInto',
         ]))
 
 GOOGLE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
@@ -334,7 +335,7 @@ def get_gcode_issue(issue_summary):
     }
 
     refs = set()
-    for k in ['BlockedOn', 'Blocking']:
+    for k in ['BlockedOn', 'Blocking', 'MergedInto']:
         b = issue_summary[k]
         if b:
             refs |= set(map(int, b.split(',')))
