@@ -71,6 +71,11 @@ def output(string, level=0):
         sys.stdout.write(string)
         sys.stdout.flush()
 
+def write_json(obj, filename):
+    with open(filename, "w") as fp:
+        json.dump(obj, fp, indent=4, separators=(',', ': '), sort_keys=True)
+        fp.write('\n')
+
 
 def parse_gcode_date(date_text):
     """ Transforms a Google Code date into a more human readable string. """
@@ -96,7 +101,7 @@ def valid_email(s):
     return ''
 
 
-def get_gc_issue(s):
+def extract_refs(s):
     r = GOOGLE_ISSUE_RE_TMPL.format(google_project_name, r'[0-9]+')
     return set(map(int, re.findall(r, s)))
 
@@ -104,9 +109,105 @@ def fix_gc_issue_n(s, on, nn):
     r = GOOGLE_ISSUE_RE_TMPL.format(google_project_name, on)
     return re.sub(r, '#'+str(nn), s)
 
+def fixup_refs(s):
+    delta = (options.issues_start_from - 1)
+    refs = extract_refs(s)
+    for ref in refs:
+        s = fix_gc_issue_n(s, ref, ref + delta)
+    refs = set(ref + delta for ref in refs)
+    return s, refs
+
 
 def reindent(s, n=4):
     return "\n".join((n * " ") + i for i in s.splitlines())
+
+def filter_unicode(s):
+    for ch in s:
+        if ch >= u"\uffff":
+            output(" FIXME: unicode %s" % hex(ord(ch)))
+            yield "FIXME: unicode %s" % hex(ord(ch))
+        else:
+            yield ch
+
+MARKDOWN_DATE = gt('2009-04-20T19:00:00Z')
+# markdown:
+#    http://daringfireball.net/projects/markdown/syntax
+#    http://github.github.com/github-flavored-markdown/
+# vs textile:
+#    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
+
+def format_message(m, comment_nr=0):
+    is_issue = (comment_nr == 0)
+
+    i_tmpl = '"#{}"'
+    if options.issues_link:
+        i_tmpl += ':' + options.issues_link + '/{}'
+
+    m['body'] = ''.join(filter_unicode(m['body']))
+    m['body'], refs = fixup_refs(m['body'])
+
+    if is_issue:
+        try:
+            oid = m['orig_owner']
+            del m['orig_owner']
+        except KeyError:
+            oid = None
+
+    if gt(m['created_at']) >= MARKDOWN_DATE:
+        if m['body'].find("```") >= 0:
+            m['body'] = reindent(m['body'])
+            output(" FIXME: triple quotes in {} body"
+                   .format('issue' if is_issue else 'comment '+comment_nr))
+        else:
+            m['body'] = "```\r\n" + m['body'] + "\r\n```"
+        m['body'] += "\r\n"
+
+        if is_issue:
+            m['body'] += ("Original issue for #" + str(m['number']) + ": " +
+                          m['link'] + "\r\n" +
+                          "Original author: " + m['orig_user'] + "\r\n")
+        if refs:
+            m['body'] += ("Referenced issues: " +
+                              ", ".join("#" + str(i) for i in refs) + "\r\n")
+        if is_issue:
+            if oid:
+                m['body'] += ("Original owner: " + oid + "\r\n")
+        else:
+            m['body'] += ("Original comment: " + m['link'] + "\r\n")
+            m['body'] += ("Original author: " + m['orig_user'] + "\r\n")
+
+    else:
+        m['body'] = "bc.. " + m['body'] + "\r\n"
+
+        if is_issue:
+            m['body'] += ("\r\n" +
+                          "p. Original issue for " +
+                          i_tmpl.format(*[str(m['number'])]*2) + ": " +
+                          '"' + m['link'] + '":' +
+                          m['link'] + "\r\n\r\n" +
+                          "p. Original author: " + '"' + m['orig_user'] +
+                          '":' + m['orig_user'] + "\r\n")
+        if refs:
+            m['body'] += ("\r\np. Referenced issues: " +
+                          ", ".join(i_tmpl.format(*[str(i)]*2) for i in refs) +
+                          "\r\n")
+        if is_issue:
+            if oid:
+                m['body'] += ("\r\np. Original owner: " +
+                              '"' + oid + '":' + oid + "\r\n")
+        else:
+            m['body'] += ("\r\np. Original comment: " + '"' + m['link'] +
+                          '":' + m['link'] + "\r\n")
+            m['body'] += ("\r\np. Original author: " + '"' + m['orig_user'] +
+                          '":' + m['orig_user'] + "\r\n")
+
+    if len(m['body']) >= 65534:
+        m['body'] = "FIXME: too long issue body"
+        output(" FIXME: too long {} body"
+               .format('issue' if is_issue else 'comment '+comment_nr))
+
+    del m['orig_user']
+    del m['link']
 
 
 def add_issue_to_github(issue):
@@ -139,144 +240,17 @@ def add_issue_to_github(issue):
         del issue['owner']
     except KeyError:
         pass
-
-    markdown_date = gt('2009-04-20T19:00:00Z')
-    # markdown:
-    #    http://daringfireball.net/projects/markdown/syntax
-    #    http://github.github.com/github-flavored-markdown/
-    # vs textile:
-    #    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
-
-    idx = get_gc_issue(issue['body'])
-    if idx:
-        for i in idx:
-            nn = i + (options.issues_start_from - 1)
-            issue['body'] = fix_gc_issue_n(issue['body'], i, nn)
-        idx = set(i + (options.issues_start_from - 1) for i in idx)
-
-    if len(issue['body']) >= 65534:
-        issue['body'] = "FIXME: too long issue body"
-        output(" FIXME: too long body")
-
-    body = ""
-    for i in issue['body']:
-        if i >= u"\uffff":
-            body += "FIXME: unicode %s" % hex(ord(i))
-            output(" FIXME: unicode %s" % hex(ord(i)))
-        else:
-            body += i
-    issue['body'] = body
-
     try:
-        oid = issue['orig_owner']
-        del issue['orig_owner']
-    except KeyError:
-        oid = None
-
-    i_tmpl = '"#{}"'
-    if options.issues_link:
-        i_tmpl = '"#{}":' + options.issues_link + '/{}'
-
-    c_idx = set()
-    comments_fixed = list(comments)
-    for i, c in enumerate(comments):
-        c_i = get_gc_issue(c['body'])
-        if c_i:
-            for i in c_i:
-                nn = i + (options.issues_start_from - 1)
-                c['body'] = fix_gc_issue_n(c['body'], i, nn)
-            c_i = set(i + (options.issues_start_from - 1) for i in c_i)
-            c_idx |= c_i
-        body = ""
-        for s in c['body']:
-            if s >= u"\uffff":
-                body += "FIXME: unicode %s" % hex(ord(s))
-                output(" FIXME: unicode %s" % hex(ord(s)))
-            else:
-                body += s
-        c['body'] = body
-
-        if len(c['body']) >= 65534:
-            c['body'] = "FIXME: too long comment body"
-            output(" FIXME: comment %d - too long body" % i + 1)
-
-        if gt(c['created_at']) >= markdown_date:
-            if c['body'].find("```") >= 0:
-                c['body'] = reindent(c['body'])
-                output(" FIXME: triple quotes in c%s" % str(i))
-            else:
-                c['body'] = "```\r\n" + c['body'] + "\r\n```"
-            c['body'] += "\r\n"
-            if c_i:
-                c['body'] += ("Referenced issues: " +
-                              ", ".join("#" + str(i) for i in c_i) + "\r\n")
-            c['body'] += ("Original comment: " + c['link'] + "\r\n")
-            c['body'] += ("Original author: " + c['orig_user'] + "\r\n")
-        else:
-            c['body'] = "bc.. " + c['body'] + "\r\n"
-            if c_i:
-                c['body'] += ("\r\np. Referenced issues: " +
-                              ", ".join(i_tmpl.format(*[str(i)]*2) for i in c_i) + "\r\n")
-            c['body'] += ("\r\np. Original comment: " + '"' + c['link'] +
-                          '":' + c['link'] + "\r\n")
-            c['body'] += ("\r\np. Original author: " + '"' + c['orig_user'] +
-                          '":' + c['orig_user'] + "\r\n")
-        del c['link']
-        del c['orig_user']
-
-    comments = comments_fixed
-
-    with open("issues/" + str(issue['number']) + ".comments.json", "w") as f:
-        f.write(json.dumps(comments, indent=4, separators=(',', ': '), sort_keys=True))
-        f.write('\n')
-
-    try:
-        refs = issue['references']
         del issue['references']
-        idx |= set(i + (options.issues_start_from - 1) for i in refs)
     except KeyError:
         pass
 
-    if c_idx:
-        idx -= c_idx
+    format_message(issue)
+    write_json(issue, "issues/{}.json".format(gid))
 
-    if gt(issue['created_at']) >= markdown_date:
-        if issue['body'].find("```") >= 0:
-            issue['body'] = reindent(issue['body'])
-            output(" FIXME: triple quotes in issue body")
-        else:
-            issue['body'] = "```\r\n" + issue['body'] + "\r\n```"
-        issue['body'] += "\r\n"
-
-        issue['body'] += ("Original issue for #" + str(gid) + ": " +
-                          issue['link'] + "\r\n" +
-                          "Original author: " + issue['orig_user'] + "\r\n")
-        if idx:
-            issue['body'] += ("Referenced issues: " +
-                              ", ".join("#" + str(i) for i in idx) + "\r\n")
-        if oid:
-            issue['body'] += ("Original owner: " + oid + "\r\n")
-    else:
-        issue['body'] = ("bc.. " + issue['body'] + "\r\n\r\n" +
-                         "p. Original issue for " +
-                         i_tmpl.format(*[str(gid)]*2) + ": " +
-                         '"' + issue['link'] + '":' +
-                         issue['link'] + "\r\n\r\n" +
-                         "p. Original author: " + '"' + issue['orig_user'] +
-                         '":' + issue['orig_user'] + "\r\n")
-        if idx:
-            issue['body'] += ("\r\np. Referenced issues: " +
-                              ", ".join(i_tmpl.format(*[str(i)]*2) for i in idx) +
-                              "\r\n")
-        if oid:
-            issue['body'] += ("\r\np. Original owner: " +
-                              '"' + oid + '":' + oid + "\r\n")
-    del issue['orig_user']
-    del issue['link']
-
-    with open("issues/" + str(issue['number']) + ".json", "w") as f:
-        f.write(json.dumps(issue, indent=4, separators=(',', ': '), sort_keys=True))
-        f.write('\n')
+    for i, comment in enumerate(comments):
+        format_message(comment, i+1)
+    write_json(comments, "issues/{}.comments.json".format(gid))
 
 
 def map_author(gc_userlink, kind=None):
