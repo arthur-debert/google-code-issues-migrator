@@ -25,11 +25,8 @@ from pyquery import PyQuery as pq
 
 GOOGLE_MAX_RESULTS = 25
 
-GOOGLE_ISSUE_TEMPLATE = '_Original issue: {}_'
 GOOGLE_ISSUES_URL = 'https://code.google.com/p/{}/issues/csv?can=1&num={}&start={}&colspec=ID%20Type%20Status%20Owner%20Summary%20Opened%20Closed%20Reporter%20BlockedOn%20Blocking&sort=id'
-GOOGLE_URL = 'http://code.google.com/p/{}/issues/detail?id={}'
-GOOGLE_URL_RE = 'http://code.google.com/p/%s/issues/detail\?id=(\d+)'
-GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL_RE)
+GOOGLE_URL = 'https://code.google.com/p/{}/issues/detail?id={}'
 
 # Mapping from Google Code issue labels to Github labels
 LABEL_MAPPING = {
