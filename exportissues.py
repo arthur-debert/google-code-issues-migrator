@@ -25,8 +25,23 @@ from pyquery import PyQuery as pq
 
 GOOGLE_MAX_RESULTS = 25
 
-GOOGLE_ISSUES_URL = 'https://code.google.com/p/{}/issues/csv?can=1&num={}&start={}&colspec=ID%20Type%20Status%20Owner%20Summary%20Opened%20Closed%20Reporter%20BlockedOn%20Blocking&sort=id'
-GOOGLE_URL = 'https://code.google.com/p/{}/issues/detail?id={}'
+GOOGLE_ISSUES_URL = 'https://code.google.com/p/{}/issues'
+GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
+        '/csv?can=1&num={}&start={}&sort=id&colspec=' +
+        '%20'.join([
+            'ID',
+            'Type',
+            'Status',
+            'Owner',
+            'Summary',
+            'Opened',
+            'Closed',
+            'Reporter',
+            'BlockedOn',
+            'Blocking',
+        ]))
+
+GOOGLE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
 
 # Mapping from Google Code issue labels to Github labels
 LABEL_MAPPING = {
@@ -447,7 +462,7 @@ def get_gcode_issues():
     start_index = 0
     issues = []
     while True:
-        url = GOOGLE_ISSUES_URL.format(google_project_name, count, start_index)
+        url = GOOGLE_ISSUES_CSV_URL.format(google_project_name, count, start_index)
         issues.extend(row for row in csv.DictReader(urllib2.urlopen(url), dialect=csv.excel))
 
         if issues and 'truncated' in issues[-1]['ID']:
