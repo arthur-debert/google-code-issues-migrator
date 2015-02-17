@@ -248,10 +248,9 @@ def add_issue_to_github(issue):
             issue['body'] = "```\r\n" + issue['body'] + "\r\n```"
         issue['body'] += "\r\n"
 
-        issue['body'] = (issue['body'] +
-                         "Original issue for #" + str(gid) + ": " +
-                         issue['link'] + "\r\n" +
-                         "Original author: " + issue['orig_user'] + "\r\n")
+        issue['body'] += ("Original issue for #" + str(gid) + ": " +
+                          issue['link'] + "\r\n" +
+                          "Original author: " + issue['orig_user'] + "\r\n")
         if idx:
             issue['body'] += ("Referenced issues: " +
                               ", ".join("#" + str(i) for i in idx) + "\r\n")
