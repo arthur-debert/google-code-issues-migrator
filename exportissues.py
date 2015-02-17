@@ -302,7 +302,10 @@ def get_gcode_issue(issue_summary):
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
-    labels = ['imported']
+    labels = []
+    if options.imported_label:
+        labels.append(options.imported_label)
+
     for label in issue_summary['AllLabels'].split(', '):
         if label.startswith('Priority-') and options.omit_priority:
             continue
@@ -448,6 +451,7 @@ if __name__ == "__main__":
     parser.add_option('--milestones-start-from', dest = 'milestones_start_from', help = 'First milestone number', default = 1, type = int)
     parser.add_option('--issues-link', dest = 'issues_link', help = 'Full link to issues page in the new repo', default = None, type = str)
     parser.add_option('--export-date', dest = 'updated_at', help = 'Date of export', default = None, type = str)
+    parser.add_option('--imported-label', dest = 'imported_label', help = 'A label to mark all imported issues', default = 'imported', type = str)
     parser.add_option('--fallback-user', dest = 'fallback_user', help = 'Default username for unknown users', default = None, type = str)
     parser.add_option("-s", "--silent", action = "store_false", dest = "verbose",
                       help = "Output critical messages only")
