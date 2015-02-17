@@ -180,7 +180,7 @@ def format_message(m, comment_nr=0):
     m.body, refs = fixup_refs(m.body)
 
     if gt(m.created_at) >= MARKDOWN_DATE:
-        if m.body.find("```") >= 0:
+        if "```" in m.body:
             m.body = reindent(m.body)
             output(" FIXME: triple quotes in {} body"
                    .format('issue' if is_issue else 'comment '+comment_nr))
@@ -369,7 +369,7 @@ def get_gcode_issue(issue_summary):
         # Strip the placeholder text if there's any other updates
         body = body.replace('(No comment was entered for this change.)\n\n', '')
 
-        if body.find('**Status:** Fixed') >= 0:
+        if '**Status:** Fixed' in body:
             issue.closed_at = date
 
         if re.match(r'^c([0-9]+)$', comment_pq('a').attr('name')):
