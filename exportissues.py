@@ -246,32 +246,30 @@ def add_issue_to_github(issue):
 
 
 def map_author(gc_uid, kind=None):
-    if gc_uid:
-        email_pat = gc_uid
-        if '@' not in email_pat:
-            email_pat += '@gmail.com'
-        email_pat = email_pat.replace('.', r'\.').replace(r'\.\.\.@', r'[\w.]+@')
-        email_re = re.compile(email_pat, re.I)
+    email_pat = gc_uid
+    if '@' not in email_pat:
+        email_pat += '@gmail.com'
+    email_pat = email_pat.replace('.', r'\.').replace(r'\.\.\.@', r'[\w.]+@')
+    email_re = re.compile(email_pat, re.I)
 
-        matches = []
-        for email, gh_user in authors.items():
-            if email_re.match(email):
-                matches.append((email, gh_user))
-        if len(matches) > 1:
-            output('FIXME: multiple matches for {gc_uid}'.format(**locals()))
-            for email, gh_user in matches:
-                output('\t{email}'.format(**locals()))
-        elif matches:
-            if options.verbose > 1:
-                output("{:<10}    {:>22} -> {:>32}:   {:<16}\n"
-                       .format(kind, gc_uid, *matches[0]), level=2)
-            return matches[0]
-
+    matches = []
+    for email, gh_user in authors.items():
+        if email_re.match(email):
+            matches.append((email, gh_user))
+    if len(matches) > 1:
+        output('FIXME: multiple matches for {gc_uid}'.format(**locals()))
+        for email, gh_user in matches:
+            output('\t{email}'.format(**locals()))
+    elif matches:
         if options.verbose > 1:
-            output("{:<10}!!! {:>22}\n".format(kind, gc_uid), level=2)
-        return gc_uid, None
+            output("{:<10}    {:>22} -> {:>32}:   {:<16}\n"
+                   .format(kind, gc_uid, *matches[0]), level=2)
+        return matches[0][1]
 
-    return None, None
+    if options.verbose > 1:
+        output("{:<10}!!! {:>22}\n".format(kind, gc_uid), level=2)
+
+    return options.fallback_user
 
 def get_gcode_issue(issue_summary):
     output('Importing issue %d\n' % int(issue_summary['ID']), level=1)
@@ -289,10 +287,11 @@ def get_gcode_issue(issue_summary):
         issue.title = "FIXME: empty title"
         output(" FIXME: empty title")
 
-    if issue_summary['Owner']:
-        issue.extra.orig_owner, issue.assignee = map_author(issue_summary['Owner'], 'owner')
+    issue.extra.orig_owner = issue_summary['Owner']
+    if issue.extra.orig_owner:
+        issue.assignee = map_author(issue.extra.orig_owner, 'owner')
     else:
-        issue.extra.orig_owner = issue.assignee = None
+        issue.assignee = None
 
     issue.extra.link = GOOGLE_URL.format(google_project_name, issue_summary['ID'])
 
@@ -338,9 +337,9 @@ def get_gcode_issue(issue_summary):
     doc = pq(opener.open(issue.extra.link).read())
 
     issue_pq = doc('.issuedescription .issuedescription')
-    issue.extra.orig_user, user = map_author(issue_pq('.userlink').text(), 'reporter')
-    if user:
-        issue.user = user
+
+    issue.extra.orig_user = issue_pq('.userlink').text()
+    issue.user = map_author(issue.extra.orig_user, 'reporter')
 
     issue.body = issue_pq('pre').text()
 
@@ -381,9 +380,8 @@ def get_gcode_issue(issue_summary):
             created_at = date,
             updated_at = options.updated_at)
 
-        comment.extra.orig_user, user = map_author(comment_pq('.userlink').text(), 'comment')
-        if user:
-            comment.user = user
+        comment.extra.orig_user = comment_pq('.userlink').text()
+        comment.user = map_author(comment.extra.orig_user, 'comment')
 
         comment.extra.link = issue.extra.link + '#c' + str(i)
         issue.extra.comments.append(comment)
@@ -450,6 +448,7 @@ if __name__ == "__main__":
     parser.add_option('--milestones-start-from', dest = 'milestones_start_from', help = 'First milestone number', default = 1, type = int)
     parser.add_option('--issues-link', dest = 'issues_link', help = 'Full link to issues page in the new repo', default = None, type = str)
     parser.add_option('--export-date', dest = 'updated_at', help = 'Date of export', default = None, type = str)
+    parser.add_option('--fallback-user', dest = 'fallback_user', help = 'Default username for unknown users', default = None, type = str)
     parser.add_option("-s", "--silent", action = "store_false", dest = "verbose",
                       help = "Output critical messages only")
     parser.add_option("-v", "--verbose", action = "count", dest = "verbose",
