@@ -1,7 +1,9 @@
 issues
 milestones
+
 authors.json
 authors.json-new
+labels.txt
 
 # Python
 *.py[cod]

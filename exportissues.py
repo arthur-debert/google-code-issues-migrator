@@ -16,6 +16,7 @@ import re
 import os
 import sys
 import urllib2
+import traceback
 
 from datetime import datetime
 from time import time
@@ -314,8 +315,6 @@ def get_gcode_issue(issue_summary):
 
     issue.extra.link = GOOGLE_URL.format(google_project_name, issue_summary['ID'])
 
-    global mnum
-    global milestones
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
@@ -329,13 +328,14 @@ def get_gcode_issue(issue_summary):
         if label.startswith('Milestone-'):
             milestone = label[10:]
             if milestone:
+                global milestones
                 if milestone not in milestones:
                     milestones[milestone] = Namespace(
-                       number     = mnum + (options.milestones_start_from - 1),
-                       state      = 'open',
+                       number     = len(milestones) + options.milestones_start_from,
                        title      = milestone,
                        created_at = issue.created_at)
-                    mnum += 1
+                    if issue.state == 'open':
+                       milestone.state = 'open'
                 issue.milestone = milestones[milestone].number
             continue
 
@@ -476,6 +476,7 @@ if __name__ == "__main__":
     parser.add_option('--end-at', dest = 'end_at', help = 'End at the given Google Code issue number', default = None, type = int)
     parser.add_option('--issues-start-from', dest = 'issues_start_from', help = 'First issue number', default = 1, type = int)
     parser.add_option('--milestones-start-from', dest = 'milestones_start_from', help = 'First milestone number', default = 1, type = int)
+    parser.add_option('--milestone-date-format', dest = 'milestone_date_format', help = 'Format of [date] for milestones from labels.txt', default = '%Y-%m-%d', type = str)
     parser.add_option('--issues-link', dest = 'issues_link', help = 'Full link to issues page in the new repo', default = None, type = str)
     parser.add_option('--export-date', dest = 'updated_at', help = 'Date of export', default = None, type = str)
     parser.add_option('--imported-label', dest = 'imported_label', help = 'A label to mark all imported issues', default = 'imported', type = str)
@@ -500,8 +501,58 @@ if __name__ == "__main__":
         authors = {}
 
     authors_orig = authors.copy()
+
     milestones = {}
-    mnum = 1
+
+    try:
+        # The labels.txt file has the same format as a list of predefined
+        # issues accessible for Google Code project admins
+        # at http://code.google.com/p/PROJ/adminIssues
+        #
+        # Each Google Code label except for Milestone-xxx should map to
+        # a corresponding GitHub label:
+        #
+        #   Type-Defect          = bug
+        #   Type-Enhancement     = enhancement
+        #
+        # However, milestones are treated in a different way.
+        # The name of a milestone is extracted from the LHS,
+        # and the milestone description is taken form the RHS among with
+        # an optional date enclosed in square brackets. The format of the date
+        # is specified through --milestone-date-format command line argument.
+        #
+        #   Milestone-v0.1.3     = [2010-05-01] Basic kernel APIs are implemented
+        #
+        with open("labels.txt", "r") as f:
+            for line in f:
+                label, description = (s.strip() for s in line.split('=', 1))
+                kind, _, value = label.partition('-')
+
+                if kind == 'Milestone':
+                    if not value:
+                        raise ValueError("Unable to parse milestone name: '{}'".format(label))
+
+                    milestone = milestones[value] = Namespace(
+                       number = len(milestones) + options.milestones_start_from,
+                       state  = 'closed',  # unless there will be any open issues encountered
+                       title  = value)
+
+                    date_match = re.match(r'^\[([^\]]+)\]\s*', description)
+                    if date_match:
+                        description = description[date_match.end():]
+                        if description:
+                            milestone.description = description
+
+                        date_text = date_match.group(1)
+                        parsed_date = datetime.strptime(date_text, options.milestone_date_format)
+
+                        milestone.due_on = parsed_date.isoformat() + "Z"
+
+    except ValueError:
+        traceback.print_exc()
+    except IOError:
+        pass
+
     if not options.updated_at:
         options.updated_at = datetime.fromtimestamp(int(time())).isoformat() + "Z"
 
