@@ -334,10 +334,11 @@ def get_gcode_issue(issue_summary):
                     mnum += 1
                 issue.milestone = milestones[milestone].number
             continue
+
+        label = LABEL_MAPPING.get(label, label)
         if not label:
             continue
-
-        labels.append(LABEL_MAPPING.get(label, label))
+        labels.append(label)
 
     # Add additional labels based on the issue's state
     status = issue_summary['Status'].lower()
