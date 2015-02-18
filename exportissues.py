@@ -71,6 +71,9 @@ class Namespace(object):
 
     def __init__(self, **kwargs):
         super(Namespace, self).__init__()
+        self(**kwargs)
+
+    def __call__(self, **kwargs):
         self.__dict__.update(kwargs)
 
     __hash__ = None
@@ -290,12 +293,11 @@ def get_gcode_issue(issue_summary):
     # Populate properties available from the summary CSV
     issue = ExtraNamespace(
         number     = int(issue_summary['ID']) + (options.issues_start_from - 1),
-        title      = issue_summary['Summary'].replace('%', '&#37;'),
+        title      = issue_summary['Summary'].replace('%', '&#37;').strip(),
         state      = 'closed' if issue_summary['Closed'] else 'open',
         created_at = datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])).isoformat() + "Z",
         updated_at = options.updated_at)
 
-    issue.title = issue.title.strip()
     if not issue.title:
         issue.title = "FIXME: empty title"
         output(" FIXME: empty title")
@@ -359,11 +361,11 @@ def get_gcode_issue(issue_summary):
 
     issue.body = issue_pq('pre').text()
 
-    issue.extra.paragraphs = paragraphs = []
+    issue.extra.paragraphs = []
     for paragraph_node in issue_pq('pre').contents():
         is_text = isinstance(paragraph_node, basestring)
         text = paragraph_node.strip() if is_text else paragraph_node.text
-        paragraphs.append((text, not is_text))
+        issue.extra.paragraphs.append((text, not is_text))
 
     issue.extra.comments = []
     for comment_pq in map(pq, doc('.issuecomment')):
@@ -404,12 +406,13 @@ def get_gcode_issue(issue_summary):
             created_at = date,
             updated_at = options.updated_at)
 
-        comment.extra.paragraphs = [(body, False)]
-        comment.extra.updates = updates
-        comment.extra.orig_user = comment_pq('.userlink').text()
-        comment.user = map_author(comment.extra.orig_user, 'comment')
+        comment.extra(
+            link       = issue.extra.link + '#c' + str(i),
+            paragraphs = [(body, False)],
+            updates    = updates,
+            orig_user  = comment_pq('.userlink').text())
 
-        comment.extra.link = issue.extra.link + '#c' + str(i)
+        comment.user = map_author(comment.extra.orig_user, 'comment')
         issue.extra.comments.append(comment)
 
     return issue
