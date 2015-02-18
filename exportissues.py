@@ -313,8 +313,6 @@ def get_gcode_issue(issue_summary):
     global mnum
     global milestones
 
-    ms = ''
-
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
     labels = []
@@ -325,23 +323,21 @@ def get_gcode_issue(issue_summary):
         if label.startswith('Priority-') and options.omit_priority:
             continue
         if label.startswith('Milestone-'):
-            ms = label[10:]
+            milestone = label[10:]
+            if milestone:
+                if milestone not in milestones:
+                    milestones[milestone] = Namespace(
+                       number     = mnum + (options.milestones_start_from - 1),
+                       state      = 'open',
+                       title      = milestone,
+                       created_at = issue.created_at)
+                    mnum += 1
+                issue.milestone = milestones[milestone].number
             continue
         if not label:
             continue
-        labels.append(LABEL_MAPPING.get(label, label))
 
-        if ms:
-            try:
-                milestones[ms]
-            except KeyError:
-                milestones[ms] = ExtraNamespace(
-                   number     = mnum + (options.milestones_start_from - 1),
-                   state      = 'open',
-                   title      = ms,
-                   created_at = issue.created_at)
-                mnum += 1
-            issue.milestone = milestones[ms].number
+        labels.append(LABEL_MAPPING.get(label, label))
 
     # Add additional labels based on the issue's state
     status = issue_summary['Status'].lower()
