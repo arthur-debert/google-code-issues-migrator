@@ -51,8 +51,12 @@ GOOGLE_ISSUE_RE_TMPL = r'''(?x)
 
 # Mapping from Google Code issue labels to Github labels
 LABEL_MAPPING = {
-    'Type-Defect' : 'bug',
-    'Type-Enhancement' : 'enhancement'
+    'Type-Defect'      : 'bug',
+    'Type-Enhancement' : 'enhancement',
+    'Priority-Critical': 'prio:high',
+    'Priority-High'    : 'prio:high',
+    'Priority-Medium'  : None,
+    'Priority-Low'     : 'prio:low',
 }
 
 # Mapping from Google Code issue states to Github labels
