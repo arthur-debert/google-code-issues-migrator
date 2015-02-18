@@ -162,6 +162,24 @@ def filter_unicode(s):
         else:
             yield ch
 
+def gen_md_body(paragraphs):
+    for text, is_title in paragraphs:
+        text = text.strip()
+
+        if is_title:
+            text = ' '.join(line.strip() for line in text.splitlines())
+            yield "\r\n##### "
+        else:
+            if "```" not in text:
+                text = "```\r\n" + text + "\r\n```"
+            else:
+                output(" FIXME: triple quotes in {} body: {}"
+                       .format('issue' if is_issue else 'comment ' + comment_nr,
+                               text))
+                text = reindent(text)
+        yield text
+        yield "\r\n"
+
 MARKDOWN_DATE = gt('2009-04-20T19:00:00Z')
 # markdown:
 #    http://daringfireball.net/projects/markdown/syntax
@@ -180,12 +198,7 @@ def format_message(m, comment_nr=0):
     m.body, refs = fixup_refs(m.body)
 
     if gt(m.created_at) >= MARKDOWN_DATE:
-        if "```" in m.body:
-            m.body = reindent(m.body)
-            output(" FIXME: triple quotes in {} body"
-                   .format('issue' if is_issue else 'comment '+comment_nr))
-        else:
-            m.body = "```\r\n" + m.body + "\r\n```"
+        m.body = ''.join(gen_md_body(m.extra.paragraphs)).strip()
         m.body += "\r\n"
 
         if is_issue:
@@ -346,6 +359,12 @@ def get_gcode_issue(issue_summary):
 
     issue.body = issue_pq('pre').text()
 
+    issue.extra.paragraphs = paragraphs = []
+    for paragraph_node in issue_pq('pre').contents():
+        is_text = isinstance(paragraph_node, basestring)
+        text = paragraph_node.strip() if is_text else paragraph_node.text
+        paragraphs.append((text, not is_text))
+
     issue.extra.comments = []
     for comment_pq in map(pq, doc('.issuecomment')):
         if not comment_pq('.date'):
@@ -359,17 +378,19 @@ def get_gcode_issue(issue_summary):
         except UnicodeDecodeError:
             body = u'FIXME: UnicodeDecodeError'
             output("issue %d FIXME: UnicodeDecodeError\n" % issue.number)
+        else:
+            # Strip the placeholder text if there's any other updates
+            body = body.replace('(No comment was entered for this change.)\n\n', '')
 
         updates = comment_pq('.updates .box-inner')
         if updates:
-            body += ('\n\n' + updates.html().strip()
-                     .replace('\n', '').replace('<br/>', '\n')
-                     .replace('<b>', '**').replace('</b>', '**'))
+            updates = (updates.html().strip()
+                       .replace('\n', '').replace('<br/>', '\n')
+                       .replace('<b>', '**').replace('</b>', '**'))
+        else:
+            updates = ''
 
-        # Strip the placeholder text if there's any other updates
-        body = body.replace('(No comment was entered for this change.)\n\n', '')
-
-        if '**Status:** Fixed' in body:
+        if '**Status:** Fixed' in updates:
             issue.closed_at = date
 
         if re.match(r'^c([0-9]+)$', comment_pq('a').attr('name')):
@@ -383,6 +404,8 @@ def get_gcode_issue(issue_summary):
             created_at = date,
             updated_at = options.updated_at)
 
+        comment.extra.paragraphs = [(body, False)]
+        comment.extra.updates = updates
         comment.extra.orig_user = comment_pq('.userlink').text()
         comment.user = map_author(comment.extra.orig_user, 'comment')
 
