@@ -510,12 +510,17 @@ if __name__ == "__main__":
         # at http://code.google.com/p/PROJ/adminIssues
         #
         # Each Google Code label except for Milestone-xxx should map to
-        # a corresponding GitHub label:
+        # a corresponding GitHub label. Empty values are used to completely
+        # discard a label.
         #
         #   Type-Defect          = bug
         #   Type-Enhancement     = enhancement
+        #   Priority-Critical    = prio:high
+        #   Priority-High        = prio:high
+        #   Priority-Medium      =
+        #   Priority-Low         = prio:low
         #
-        # However, milestones are treated in a different way.
+        # Milestones are treated in a different way.
         # The name of a milestone is extracted from the LHS,
         # and the milestone description is taken form the RHS among with
         # an optional date enclosed in square brackets. The format of the date
@@ -547,6 +552,13 @@ if __name__ == "__main__":
                         parsed_date = datetime.strptime(date_text, options.milestone_date_format)
 
                         milestone.due_on = parsed_date.isoformat() + "Z"
+
+                    continue
+
+                if len(description.split()) > 1:
+                    output("FIXME: non-singleword GitHub issue label: '{}'\n"
+                           .format(description))
+                LABEL_MAPPING[label] = description
 
     except ValueError:
         traceback.print_exc()
