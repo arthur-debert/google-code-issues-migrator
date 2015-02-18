@@ -466,8 +466,8 @@ def process_gcode_issues():
 
 if __name__ == "__main__":
     usage = "usage: %prog [options] <google project name>"
-    description = "Export all issues from a Google Code project for a Github project."
-    parser = optparse.OptionParser(usage = usage, description = description)
+    parser = optparse.OptionParser(usage = usage,
+                description = "Export all issues from a Google Code project for a Github project.")
 
     parser.add_option("-p", "--omit-priority", action = "store_true", dest = "omit_priority",
                       help = "Don't migrate priority labels", default = False)
