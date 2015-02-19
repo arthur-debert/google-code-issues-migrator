@@ -68,6 +68,14 @@ STATE_MAPPING = {
     'wontfix': 'wontfix'
 }
 
+CLOSED_STATES = [
+    'Fixed',
+    'Verified',
+    'Invalid',
+    'Duplicate',
+    'WontFix',
+    'Done'
+]
 
 class Namespace(object):
     """
@@ -389,15 +397,97 @@ def get_gcode_issue(issue_summary):
             # Strip the placeholder text if there's any other updates
             body = body.replace('(No comment was entered for this change.)\n\n', '')
 
-        updates = comment_pq('.updates .box-inner')
-        if updates:
-            updates = (updates.html().strip()
-                       .replace('\n', '').replace('<br/>', '\n')
-                       .replace('<b>', '**').replace('</b>', '**'))
-        else:
-            updates = ''
+        updates = Namespace(
+            orig_owner    = None,
+            owner         = None,
+            status        = None,
+            mergedinto    = None,
+            new_milestone = None,
+            old_milestone = None,
+            new_blockedon = [],
+            old_blockedon = [],
+            new_blocking  = [],
+            old_blocking  = [],
+            new_labels    = [],
+            old_labels    = [])
 
-        if '**Status:** Fixed' in updates:
+        updates_paragraphs = split_paragraphs(comment_pq('.updates .box-inner'))
+        for text, is_title in updates_paragraphs:
+            if is_title:
+                title = text.partition(':')[0]
+                continue
+
+            is_lst = (title in ('Blockedon', 'Blocking', 'Labels'))
+            if is_lst:
+                new_lst = updates.__dict__['new_'+title.lower()]
+                old_lst = updates.__dict__['old_'+title.lower()]
+
+            if title == 'Owner':
+                updates.orig_owner = text
+                updates.owner = map_author(text, 'owner')
+
+            elif title == 'Status':
+                updates.status = text
+
+            elif title == 'Mergedinto':
+                ref_text = text.rpartition(':')[-1]
+                if ref_text:
+                    updates.mergedinto = int(ref_text) + (options.issues_start_from - 1)
+                else:
+                    updates.mergedinto = '---'
+
+            elif title in ('Blockedon', 'Blocking'):
+                for ref_text in text.split():
+                    is_removed = ref_text.startswith('-')
+                    if is_removed:
+                        ref_text = ref_text[1:]
+
+                    ref_text = ref_text.rpartition(':')[-1]
+                    ref = int(ref_text) + (options.issues_start_from - 1)
+
+                    if is_removed:
+                        if ref in lst:
+                            lst.remove(ref)
+                    else:
+                        lst.append(ref)
+
+            elif title == 'Labels':
+                for label in text.split():
+                    is_removed = label.startswith('-')
+                    if is_removed:
+                        label = label[1:]
+
+                    if label.startswith('Priority-') and options.omit_priority:
+                        continue
+                    if label.startswith('Milestone-'):
+                        milestone = label[10:]
+                        if milestone:
+                            global milestones
+                            if milestone not in milestones:
+                                milestones[milestone] = Namespace(
+                                   number     = len(milestones) + options.milestones_start_from,
+                                   title      = milestone,
+                                   created_at = issue.created_at)
+                            if is_removed:
+                                updates.old_milestone = milestones[milestone].number
+                            else:
+                                updates.new_milestone = milestones[milestone].number
+                        continue
+
+                    label = LABEL_MAPPING.get(label, label)
+                    if not label:
+                        continue
+
+                    (old_lst if is_removed else new_lst).append(label)
+
+            if is_lst:
+                for el in set(old_lst) & set(new_lst):
+                    old_lst.remove(el)
+                    new_lst.remove(el)
+
+        # from pprint import pprint
+        # pprint (updates.__dict__)
+        if updates.status in CLOSED_STATES:
             issue.closed_at = date
 
         if re.match(r'^c([0-9]+)$', comment_pq('a').attr('name')):
