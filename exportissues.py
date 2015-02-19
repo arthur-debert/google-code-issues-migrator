@@ -554,7 +554,7 @@ def get_gcode_issue(issue_summary):
         if milestone:
             if issue.state == 'open':
                 milestone.state = 'open'
-            issue.milestone = milestone
+            issue.milestone = milestone.number
 
     # Add additional labels based on the issue's state
     label = STATE_MAPPING.get(issue_summary['Status'].lower())
