@@ -128,12 +128,14 @@ def output(string, level=0):
 
 def parse_gcode_date(date_text):
     """ Transforms a Google Code date into a more human readable string. """
-
     try:
         parsed = datetime.strptime(date_text, '%a %b %d %H:%M:%S %Y').isoformat()
         return parsed + "Z"
     except ValueError:
         return date_text
+
+def timestamp_to_date(timestamp):
+    return datetime.fromtimestamp(long(timestamp)).isoformat() + "Z"
 
 
 def gt(dt_str):
@@ -328,7 +330,8 @@ def get_gcode_issue(issue_summary):
         number     = int(issue_summary['ID']) + (options.issues_start_from - 1),
         title      = issue_summary['Summary'].replace('%', '&#37;').strip(),
         state      = 'closed' if issue_summary['Closed'] else 'open',
-        created_at = datetime.fromtimestamp(float(issue_summary['OpenedTimestamp'])).isoformat() + "Z",
+        closed_at  = timestamp_to_date(issue_summary['ClosedTimestamp']) if issue_summary['Closed'] else None,
+        created_at = timestamp_to_date(issue_summary['OpenedTimestamp']),
         updated_at = options.updated_at)
 
     if not issue.title:
@@ -464,9 +467,6 @@ def get_gcode_issue(issue_summary):
                     updates.mergedinto = int(ref_text) + (options.issues_start_from - 1)
                 else:
                     updates.mergedinto = '---'
-
-        if updates.status in CLOSED_STATES:
-            issue.closed_at = date
 
         if re.match(r'^c([0-9]+)$', comment_pq('a').attr('name')):
             i = re.sub(r'^c([0-9]+)$', r'\1', comment_pq('a').attr('name'), flags=re.DOTALL)
