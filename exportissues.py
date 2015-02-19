@@ -653,6 +653,7 @@ if __name__ == "__main__":
     try:
         process_gcode_issues()
     except Exception:
+        output('\n')
         parser.print_help()
         raise
 
