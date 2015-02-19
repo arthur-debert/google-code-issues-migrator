@@ -394,7 +394,7 @@ def add_label_get_milestone(label, labels, issue):
         return milestone
 
     label = LABEL_MAPPING.get(label, label)
-    if label:
+    if label and label not in labels:
         labels.append(label)
 
 def split_paragraphs(pquery):
@@ -442,7 +442,8 @@ def get_gcode_comment_updates(issue, updates_pq):
                 if title in ('Blockedon', 'Blocking'):
                     ref_text = word.rpartition(':')[-1]
                     ref = int(ref_text) + (options.issues_start_from - 1)
-                    lst.append(ref)
+                    if ref not in lst:
+                        lst.append(ref)
 
                 elif title == 'Labels':
                     milestone = add_label_get_milestone(word, lst, issue)
@@ -454,7 +455,6 @@ def get_gcode_comment_updates(issue, updates_pq):
 
             for el in set(old_lst) & set(new_lst):
                 old_lst.remove(el)
-                new_lst.remove(el)
 
         if title == 'Owner':
             updates.orig_owner = text
