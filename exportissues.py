@@ -9,6 +9,7 @@
 
 from __future__ import print_function
 
+import codecs
 import json
 import csv
 import optparse
@@ -294,7 +295,11 @@ def format_message(m, comment_nr=0):
                       .format('Reported' if is_issue else 'Comment',
                               format_user(m, 'orig_user')))
 
-        body = format_md_body_lines(m.extra.paragraphs)
+        msg_id = m.extra.link
+        try:
+            body = messages[msg_id].strip()
+        except KeyError:
+            body = messages[msg_id] = format_md_body_lines(m.extra.paragraphs)
 
         if is_issue:
             if not m.assignee and m.extra.orig_owner:
@@ -651,6 +656,7 @@ if __name__ == "__main__":
     parser.add_option('--export-date', dest = 'updated_at', help = 'Date of export', default = None, type = str)
     parser.add_option('--imported-label', dest = 'imported_label', help = 'A label to mark all imported issues', default = 'imported', type = str)
     parser.add_option('--fallback-user', dest = 'fallback_user', help = 'Default username for unknown users', default = None, type = str)
+    parser.add_option('-d', '--dump-messages', action = 'store_true', dest = 'dump', help = 'Dump text into a file used afterwards to override messages', default = False)
     parser.add_option("-s", "--silent", action = "store_false", dest = "verbose",
                       help = "Output critical messages only")
     parser.add_option("-v", "--verbose", action = "count", dest = "verbose",
@@ -745,11 +751,40 @@ if __name__ == "__main__":
         os.mkdir('milestones')
 
     try:
+        messages = {}
+        msg_id = None
+        with codecs.open("messages.txt", "r", encoding='utf-8') as f:
+            for line in f:
+                if line.startswith('====()===={{}}====[]==== {}\n'.format(GOOGLE_ISSUES_URL)):
+                    msg_id = line.split()[1]
+                else:
+                    messages[msg_id] = messages.get(msg_id, '') + line
+    except IOError:
+        messages = {}
+
+    try:
         process_gcode_issues()
     except Exception:
         output('\n')
         parser.print_help()
         raise
+
+    if options.dump:
+        try:
+            os.rename("messages.txt", "~messages.txt")
+        except OSError:
+            pass
+        try:
+            with codecs.open("messages.txt", "w", encoding='utf-8') as f:
+                for msg_id, body in messages.iteritems():
+                    if not msg_id:
+                        continue
+                    f.write('====()===={{}}====[]==== {}\n'.format(msg_id))
+                    f.write(body.strip())
+                    f.write('\n\n')
+        except IOError:
+            pass
+
 
     for k, v in authors.items():
         if k not in authors_orig.keys():
