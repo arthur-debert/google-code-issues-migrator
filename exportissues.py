@@ -172,8 +172,6 @@ def filter_unicode(s):
 
 def gen_md_body(paragraphs):
     for text, is_title in paragraphs:
-        text = text.strip()
-
         if is_title:
             text = ' '.join(line.strip() for line in text.splitlines())
             yield "\r\n##### "
@@ -360,13 +358,19 @@ def get_gcode_issue(issue_summary):
     issue.extra.orig_user = issue_pq('.userlink').text()
     issue.user = map_author(issue.extra.orig_user, 'reporter')
 
-    issue.body = issue_pq('pre').text()
+    def split_paragraphs(pquery):
+        paragraphs = []
 
-    issue.extra.paragraphs = []
-    for paragraph_node in issue_pq('pre').contents():
-        is_text = isinstance(paragraph_node, basestring)
-        text = paragraph_node.strip() if is_text else paragraph_node.text
-        issue.extra.paragraphs.append((text, not is_text))
+        for paragraph_node in pquery.contents():
+            is_str = isinstance(paragraph_node, basestring)
+            text = (paragraph_node if is_str else paragraph_node.text or '').strip()
+            if text:
+                paragraphs.append((text, not is_str))
+
+        return paragraphs
+
+    issue.extra.paragraphs = split_paragraphs(issue_pq('pre'))
+    issue.body = issue_pq('pre').text()
 
     issue.extra.comments = []
     for comment_pq in map(pq, doc('.issuecomment')):
