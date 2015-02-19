@@ -180,11 +180,11 @@ def filter_unicode(s):
         else:
             yield ch
 
-def gen_md_body(paragraphs):
+def format_md_body_lines(paragraphs):
+    lines = []
     for text, is_title in paragraphs:
         if is_title:
-            text = ' '.join(line.strip() for line in text.splitlines())
-            yield "\r\n##### "
+            text = "\r\n##### " + ' '.join(line.strip() for line in text.splitlines())
         else:
             if "```" not in text:
                 text = "```\r\n" + text + "\r\n```"
@@ -193,8 +193,62 @@ def gen_md_body(paragraphs):
                        .format('issue' if is_issue else 'comment ' + comment_nr,
                                text))
                 text = reindent(text)
-        yield text
-        yield "\r\n"
+        lines.append(text)
+    return '\r\n'.join(lines).strip()
+
+
+def format_md_comment_updates(u):
+    lines = []
+    emit = lines.append
+
+    if u.orig_owner == '---':
+        emit("Unassigned")
+    elif u.orig_owner:
+        emit("Assigned to {s_orig_owner}")
+        s_orig_owner = format_user(u, 'owner')
+
+    if u.status in CLOSED_STATES:
+        emit("Closed with status **{u.status}**")
+    elif u.status:
+        emit("Reopened, status set to **{u.status}**")
+
+    if u.mergedinto == '---':
+        emit("Unmerged")
+    elif u.mergedinto:
+        emit("Merged into **#{u.mergedinto}**")
+
+    if u.old_milestone and u.new_milestone:
+        emit("Moved from the **{u.old_milestone}** milestone to **{u.new_milestone}**")
+    elif u.old_milestone:
+        emit("Removed from the **{u.old_milestone}** milestone")
+    elif u.new_milestone:
+        emit("Added to the **{u.new_milestone}** milestone")
+
+    s_old_blocking = format_list(u.old_blocking, '**#{}**', ' or ')
+    s_new_blocking = format_list(u.new_blocking, '**#{}**', ' and ')
+    if s_old_blocking:
+        emit("No more blocking {s_old_blocking}")
+    if s_new_blocking:
+        emit("Blocking {s_new_blocking}")
+
+    s_old_blockedon = format_list(u.old_blockedon, '**#{}**', ' or ')
+    s_new_blockedon = format_list(u.new_blockedon, '**#{}**', ' and ')
+    if s_old_blockedon:
+        emit("No more blocked on {s_old_blockedon}")
+    if s_new_blockedon:
+        emit("Blocked on {s_new_blockedon}")
+
+    s_new_labels = format_list(u.new_labels, '**`{}`**')
+    s_old_labels = format_list(u.old_labels, '**`{}`**')
+    s_labels_plural = 's' * (len(u.new_labels) + len(u.old_labels) > 1)
+    if s_new_labels and s_old_labels:
+        emit("Added {s_new_labels} and removed {s_old_labels} labels")
+    elif s_new_labels:
+        emit("Added {s_new_labels} label{s_labels_plural}")
+    elif s_old_labels:
+        emit("Removed {s_old_labels} label{s_labels_plural}")
+
+    return '\r\n'.join('> {}'.format(line) for line in lines).format(**locals())
 
 MARKDOWN_DATE = gt('2009-04-20T19:00:00Z')
 # markdown:
@@ -233,78 +287,28 @@ def format_message(m, comment_nr=0):
     m.body, refs = fixup_refs(''.join(filter_unicode(m.body)))
 
     if gt(m.created_at) >= MARKDOWN_DATE:
-        m.body = header = footer = ''
+        header = footer = ''
 
         if not m.user:
-            m.body += ("{} by {}\r\n<hr/>\r\n"
+            header = ("<sup>{} by {}</sup>\r\n"
                       .format('Reported' if is_issue else 'Comment',
                               format_user(m, 'orig_user')))
 
-        body = ''.join(gen_md_body(m.extra.paragraphs)).strip()
-        if body:
-            m.body += body + "\r\n"
+        body = format_md_body_lines(m.extra.paragraphs)
 
         if is_issue:
             if not m.assignee and m.extra.orig_owner:
-                footer += "> Originally assigned to {s_orig_owner}\r\n"
-                s_orig_owner = format_user(m, 'orig_owner')
+                footer = ("> Originally assigned to {s_orig_owner}"
+                          .format(s_orig_owner=format_user(m, 'orig_owner')))
         else:
-            u = m.extra.updates
+            footer = format_md_comment_updates(m.extra.updates)
 
-            if u.orig_owner == '---':
-                footer += "> Unassigned\r\n"
-            elif u.orig_owner:
-                footer += "> Assigned to {s_orig_owner}\r\n"
-                s_orig_owner = format_user(u, 'owner')
+        def gen_msg_blocks():
+            if header: yield header
+            if body:   yield body
+            if footer: yield footer
 
-            if u.status in CLOSED_STATES:
-                footer += "> Closed with status **{u.status}**\r\n"
-            elif u.status:
-                footer += "> Reopened, status set to **{u.status}**\r\n"
-
-            if u.mergedinto == '---':
-                footer += "> Unmerged\r\n"
-            elif u.mergedinto:
-                footer += "> Merged into **#{u.mergedinto}**\r\n"
-
-            if u.old_milestone and u.new_milestone:
-                footer += ("> Moved from the **{u.old_milestone}** milestone "
-                           "to **{u.new_milestone}**\r\n")
-            elif u.old_milestone:
-                footer += "> Removed from the **{u.old_milestone}** milestone\r\n"
-            elif u.new_milestone:
-                footer += "> Added to the **{u.new_milestone}** milestone\r\n"
-
-            s_old_blocking = format_list(u.old_blocking, '**#{}**', ' or ')
-            s_new_blocking = format_list(u.new_blocking, '**#{}**', ' and ')
-            if s_old_blocking:
-                footer += "> No more blocking {s_old_blocking}\r\n"
-            if s_new_blocking:
-                footer += "> Blocking {s_new_blocking}\r\n"
-
-            s_old_blockedon = format_list(u.old_blockedon, '**#{}**', ' or ')
-            s_new_blockedon = format_list(u.new_blockedon, '**#{}**', ' and ')
-            if s_old_blockedon:
-                footer += "> No more blocked on {s_old_blockedon}\r\n"
-            if s_new_blockedon:
-                footer += "> Blocked on {s_new_blockedon}\r\n"
-
-            s_new_labels = format_list(u.new_labels, '**`{}`**')
-            s_old_labels = format_list(u.old_labels, '**`{}`**')
-            s_labels_plural = 's' * (len(u.new_labels) + len(u.old_labels) > 1)
-            if s_new_labels and s_old_labels:
-                footer += ("> Added {s_new_labels} and "
-                           "removed {s_old_labels} labels\r\n")
-            elif s_new_labels:
-                footer += "> Added {s_new_labels} label{s_labels_plural}\r\n"
-            elif s_old_labels:
-                footer += "> Removed {s_old_labels} label{s_labels_plural}\r\n"
-
-        footer = footer.format(**locals()).strip()
-        if footer:
-            m.body += footer
-
-        m.body = m.body.strip()
+        m.body = '\r\n'.join(gen_msg_blocks())
 
     else:
         m.body = "bc.. " + m.body + "\r\n"
