@@ -417,7 +417,7 @@ def get_gcode_comment(issue, comment_pq):
         if body == '(No comment was entered for this change.)':
             body = ''
 
-    comment.extra.paragraphs = [(body, False)]
+    comment.extra.paragraphs = [(body, False)] if body else []
     comment.body = body
 
     comment.extra.orig_user  = comment_pq('.userlink').text()
