@@ -373,9 +373,9 @@ def get_gcode_comment_updates(issue, updates_pq):
                     milestone = add_label_get_milestone(word, lst, issue)
                     if milestone:
                         if is_removed:
-                            updates.old_milestone = milestone.number
+                            updates.old_milestone = milestone.title
                         else:
-                            updates.new_milestone = milestone.number
+                            updates.new_milestone = milestone.title
 
             for el in set(old_lst) & set(new_lst):
                 old_lst.remove(el)
