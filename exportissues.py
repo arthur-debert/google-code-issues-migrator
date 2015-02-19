@@ -298,6 +298,28 @@ def map_author(gc_uid, kind=None):
 
     return options.fallback_user
 
+def add_label_get_milestone(label, labels, issue):
+    global milestones
+
+    if label.startswith('Priority-') and options.omit_priority:
+        return
+    if label.startswith('Milestone-'):
+        milestone_name = label[10:]
+        if not milestone_name:
+            return
+        try:
+            milestone = milestones[milestone_name]
+        except KeyError:
+            milestone = milestones[milestone_name] = Namespace(
+               number     = len(milestones) + options.milestones_start_from,
+               title      = milestone_name,
+               created_at = issue.created_at)
+        return milestone
+
+    label = LABEL_MAPPING.get(label, label)
+    if label:
+        labels.append(label)
+
 def get_gcode_issue(issue_summary):
     output('Importing issue %d\n' % int(issue_summary['ID']), level=1)
 
@@ -329,31 +351,16 @@ def get_gcode_issue(issue_summary):
         labels.append(options.imported_label)
 
     for label in issue_summary['AllLabels'].split(', '):
-        if label.startswith('Priority-') and options.omit_priority:
-            continue
-        if label.startswith('Milestone-'):
-            milestone = label[10:]
-            if milestone:
-                global milestones
-                if milestone not in milestones:
-                    milestones[milestone] = Namespace(
-                       number     = len(milestones) + options.milestones_start_from,
-                       title      = milestone,
-                       created_at = issue.created_at)
-                    if issue.state == 'open':
-                       milestone.state = 'open'
-                issue.milestone = milestones[milestone].number
-            continue
-
-        label = LABEL_MAPPING.get(label, label)
-        if not label:
-            continue
-        labels.append(label)
+        milestone = add_label_get_milestone(label, labels, issue)
+        if milestone:
+            if issue.state == 'open':
+                milestone.state = 'open'
+            issue.milestone = milestone
 
     # Add additional labels based on the issue's state
-    status = issue_summary['Status'].lower()
-    if status in STATE_MAPPING:
-        labels.append(STATE_MAPPING[status])
+    label = STATE_MAPPING.get(issue_summary['Status'].lower())
+    if label:
+        labels.append(label)
 
     issue.labels = labels
 
@@ -417,10 +424,32 @@ def get_gcode_issue(issue_summary):
                 title = text.partition(':')[0]
                 continue
 
-            is_lst = (title in ('Blockedon', 'Blocking', 'Labels'))
-            if is_lst:
+            if title in ('Blockedon', 'Blocking', 'Labels'):
                 new_lst = updates.__dict__['new_'+title.lower()]
                 old_lst = updates.__dict__['old_'+title.lower()]
+
+                for word in text.split():
+                    is_removed = word.startswith('-')
+                    if is_removed:
+                        word = word[1:]
+                    lst = (old_lst if is_removed else new_lst)
+
+                    if title in ('Blockedon', 'Blocking'):
+                        ref_text = word.rpartition(':')[-1]
+                        ref = int(ref_text) + (options.issues_start_from - 1)
+                        lst.append(ref)
+
+                    elif title == 'Labels':
+                        milestone = add_label_get_milestone(word, lst, issue)
+                        if milestone:
+                            if is_removed:
+                                updates.old_milestone = milestone.number
+                            else:
+                                updates.new_milestone = milestone.number
+
+                for el in set(old_lst) & set(new_lst):
+                    old_lst.remove(el)
+                    new_lst.remove(el)
 
             if title == 'Owner':
                 updates.orig_owner = text
@@ -436,57 +465,6 @@ def get_gcode_issue(issue_summary):
                 else:
                     updates.mergedinto = '---'
 
-            elif title in ('Blockedon', 'Blocking'):
-                for ref_text in text.split():
-                    is_removed = ref_text.startswith('-')
-                    if is_removed:
-                        ref_text = ref_text[1:]
-
-                    ref_text = ref_text.rpartition(':')[-1]
-                    ref = int(ref_text) + (options.issues_start_from - 1)
-
-                    if is_removed:
-                        if ref in lst:
-                            lst.remove(ref)
-                    else:
-                        lst.append(ref)
-
-            elif title == 'Labels':
-                for label in text.split():
-                    is_removed = label.startswith('-')
-                    if is_removed:
-                        label = label[1:]
-
-                    if label.startswith('Priority-') and options.omit_priority:
-                        continue
-                    if label.startswith('Milestone-'):
-                        milestone = label[10:]
-                        if milestone:
-                            global milestones
-                            if milestone not in milestones:
-                                milestones[milestone] = Namespace(
-                                   number     = len(milestones) + options.milestones_start_from,
-                                   title      = milestone,
-                                   created_at = issue.created_at)
-                            if is_removed:
-                                updates.old_milestone = milestones[milestone].number
-                            else:
-                                updates.new_milestone = milestones[milestone].number
-                        continue
-
-                    label = LABEL_MAPPING.get(label, label)
-                    if not label:
-                        continue
-
-                    (old_lst if is_removed else new_lst).append(label)
-
-            if is_lst:
-                for el in set(old_lst) & set(new_lst):
-                    old_lst.remove(el)
-                    new_lst.remove(el)
-
-        # from pprint import pprint
-        # pprint (updates.__dict__)
         if updates.status in CLOSED_STATES:
             issue.closed_at = date
 
