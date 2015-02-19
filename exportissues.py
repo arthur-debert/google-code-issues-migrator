@@ -442,6 +442,9 @@ def get_gcode_issue(issue_summary):
         issue.title = "FIXME: empty title"
         output(" FIXME: empty title")
 
+    issue.extra.orig_user = issue_summary['Reporter']
+    issue.user = map_author(issue.extra.orig_user, 'reporter')
+
     issue.extra.orig_owner = issue_summary['Owner']
     if issue.extra.orig_owner:
         issue.assignee = map_author(issue.extra.orig_owner, 'owner')
@@ -475,9 +478,6 @@ def get_gcode_issue(issue_summary):
     doc = pq(opener.open(issue.extra.link).read())
 
     issue_pq = doc('.issuedescription .issuedescription')
-
-    issue.extra.orig_user = issue_pq('.userlink').text()
-    issue.user = map_author(issue.extra.orig_user, 'reporter')
 
     issue.extra.paragraphs = split_paragraphs(issue_pq('pre'))
     issue.body = issue_pq('pre').text()
