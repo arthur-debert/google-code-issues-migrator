@@ -400,11 +400,26 @@ def add_label_get_milestone(label, labels, issue):
 def split_paragraphs(pquery):
     paragraphs = []
 
-    for paragraph_node in pquery.contents():
-        is_str = isinstance(paragraph_node, basestring)
-        text = (paragraph_node if is_str else paragraph_node.text or '').strip()
-        if text:
-            paragraphs.append((text, not is_str))
+    was_title = None
+    accum_text = ''
+    for paragraph in pquery.contents():
+        is_str = isinstance(paragraph, basestring)
+        if not is_str:
+            paragraph = pq(paragraph)
+        text = (paragraph if is_str else paragraph.text()).strip()
+        if not text:
+            continue
+        is_title = not is_str and paragraph.is_('b')
+        if is_title == was_title:
+            accum_text += text
+            continue
+        if was_title is not None:
+            paragraphs.append((accum_text, was_title))
+        accum_text = text
+        was_title = is_title
+    else:
+        if was_title is not None:
+            paragraphs.append((accum_text, was_title))
 
     return paragraphs
 
