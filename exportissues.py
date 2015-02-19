@@ -322,6 +322,110 @@ def add_label_get_milestone(label, labels, issue):
     if label:
         labels.append(label)
 
+def split_paragraphs(pquery):
+    paragraphs = []
+
+    for paragraph_node in pquery.contents():
+        is_str = isinstance(paragraph_node, basestring)
+        text = (paragraph_node if is_str else paragraph_node.text or '').strip()
+        if text:
+            paragraphs.append((text, not is_str))
+
+    return paragraphs
+
+
+def get_gcode_comment_updates(issue, updates_pq):
+    updates = Namespace(
+        orig_owner    = None,
+        owner         = None,
+        status        = None,
+        mergedinto    = None,
+        new_milestone = None,
+        old_milestone = None,
+        new_blockedon = [],
+        old_blockedon = [],
+        new_blocking  = [],
+        old_blocking  = [],
+        new_labels    = [],
+        old_labels    = [])
+
+    for text, is_title in split_paragraphs(updates_pq):
+        if is_title:
+            title = text.partition(':')[0]
+            continue
+
+        if title in ('Blockedon', 'Blocking', 'Labels'):
+            new_lst = updates.__dict__['new_'+title.lower()]
+            old_lst = updates.__dict__['old_'+title.lower()]
+
+            for word in text.split():
+                is_removed = word.startswith('-')
+                if is_removed:
+                    word = word[1:]
+                lst = (old_lst if is_removed else new_lst)
+
+                if title in ('Blockedon', 'Blocking'):
+                    ref_text = word.rpartition(':')[-1]
+                    ref = int(ref_text) + (options.issues_start_from - 1)
+                    lst.append(ref)
+
+                elif title == 'Labels':
+                    milestone = add_label_get_milestone(word, lst, issue)
+                    if milestone:
+                        if is_removed:
+                            updates.old_milestone = milestone.number
+                        else:
+                            updates.new_milestone = milestone.number
+
+            for el in set(old_lst) & set(new_lst):
+                old_lst.remove(el)
+                new_lst.remove(el)
+
+        if title == 'Owner':
+            updates.orig_owner = text
+            updates.owner = map_author(text, 'owner')
+
+        elif title == 'Status':
+            updates.status = text
+
+        elif title == 'Mergedinto':
+            ref_text = text.rpartition(':')[-1]
+            if ref_text:
+                updates.mergedinto = int(ref_text) + (options.issues_start_from - 1)
+            else:
+                updates.mergedinto = '---'
+
+    return updates
+
+
+def get_gcode_comment(issue, comment_pq):
+    comment = ExtraNamespace(
+        created_at = parse_gcode_date(comment_pq('.date').attr('title')),
+        updated_at = options.updated_at)
+
+    comment.extra(
+        link       = issue.extra.link + '#' + comment_pq('a').attr('name'),
+        updates    = get_gcode_comment_updates(issue, comment_pq('.updates .box-inner')))
+
+    try:
+        body = comment_pq('pre').text().strip()
+    except UnicodeDecodeError:
+        body = u'FIXME: UnicodeDecodeError'
+        output("issue %d FIXME: UnicodeDecodeError\n" % issue.number)
+    else:
+        # Strip the placeholder text if there's any other updates
+        if body == '(No comment was entered for this change.)':
+            body = ''
+
+    comment.extra.paragraphs = [(body, False)]
+    comment.body = body
+
+    comment.extra.orig_user  = comment_pq('.userlink').text()
+    comment.user = map_author(comment.extra.orig_user, 'comment')
+
+    return comment
+
+
 def get_gcode_issue(issue_summary):
     output('Importing issue %d\n' % int(issue_summary['ID']), level=1)
 
@@ -345,7 +449,6 @@ def get_gcode_issue(issue_summary):
         issue.assignee = None
 
     issue.extra.link = GOOGLE_URL.format(google_project_name, issue_summary['ID'])
-
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
@@ -376,17 +479,6 @@ def get_gcode_issue(issue_summary):
     issue.extra.orig_user = issue_pq('.userlink').text()
     issue.user = map_author(issue.extra.orig_user, 'reporter')
 
-    def split_paragraphs(pquery):
-        paragraphs = []
-
-        for paragraph_node in pquery.contents():
-            is_str = isinstance(paragraph_node, basestring)
-            text = (paragraph_node if is_str else paragraph_node.text or '').strip()
-            if text:
-                paragraphs.append((text, not is_str))
-
-        return paragraphs
-
     issue.extra.paragraphs = split_paragraphs(issue_pq('pre'))
     issue.body = issue_pq('pre').text()
 
@@ -397,95 +489,7 @@ def get_gcode_issue(issue_summary):
         if comment_pq.hasClass('delcom'):
             continue # Skip deleted comments
 
-        date = parse_gcode_date(comment_pq('.date').attr('title'))
-        try:
-            body = comment_pq('pre').text()
-        except UnicodeDecodeError:
-            body = u'FIXME: UnicodeDecodeError'
-            output("issue %d FIXME: UnicodeDecodeError\n" % issue.number)
-        else:
-            # Strip the placeholder text if there's any other updates
-            body = body.replace('(No comment was entered for this change.)\n\n', '')
-
-        updates = Namespace(
-            orig_owner    = None,
-            owner         = None,
-            status        = None,
-            mergedinto    = None,
-            new_milestone = None,
-            old_milestone = None,
-            new_blockedon = [],
-            old_blockedon = [],
-            new_blocking  = [],
-            old_blocking  = [],
-            new_labels    = [],
-            old_labels    = [])
-
-        updates_paragraphs = split_paragraphs(comment_pq('.updates .box-inner'))
-        for text, is_title in updates_paragraphs:
-            if is_title:
-                title = text.partition(':')[0]
-                continue
-
-            if title in ('Blockedon', 'Blocking', 'Labels'):
-                new_lst = updates.__dict__['new_'+title.lower()]
-                old_lst = updates.__dict__['old_'+title.lower()]
-
-                for word in text.split():
-                    is_removed = word.startswith('-')
-                    if is_removed:
-                        word = word[1:]
-                    lst = (old_lst if is_removed else new_lst)
-
-                    if title in ('Blockedon', 'Blocking'):
-                        ref_text = word.rpartition(':')[-1]
-                        ref = int(ref_text) + (options.issues_start_from - 1)
-                        lst.append(ref)
-
-                    elif title == 'Labels':
-                        milestone = add_label_get_milestone(word, lst, issue)
-                        if milestone:
-                            if is_removed:
-                                updates.old_milestone = milestone.number
-                            else:
-                                updates.new_milestone = milestone.number
-
-                for el in set(old_lst) & set(new_lst):
-                    old_lst.remove(el)
-                    new_lst.remove(el)
-
-            if title == 'Owner':
-                updates.orig_owner = text
-                updates.owner = map_author(text, 'owner')
-
-            elif title == 'Status':
-                updates.status = text
-
-            elif title == 'Mergedinto':
-                ref_text = text.rpartition(':')[-1]
-                if ref_text:
-                    updates.mergedinto = int(ref_text) + (options.issues_start_from - 1)
-                else:
-                    updates.mergedinto = '---'
-
-        if re.match(r'^c([0-9]+)$', comment_pq('a').attr('name')):
-            i = re.sub(r'^c([0-9]+)$', r'\1', comment_pq('a').attr('name'), flags=re.DOTALL)
-        else:
-            i = str(len(issue.extra.comments) + 1)
-            output("issue %d FIXME: comment №%d\n" % (issue.number, i))
-
-        comment = ExtraNamespace(
-            body       = body,
-            created_at = date,
-            updated_at = options.updated_at)
-
-        comment.extra(
-            link       = issue.extra.link + '#c' + str(i),
-            paragraphs = [(body, False)],
-            updates    = updates,
-            orig_user  = comment_pq('.userlink').text())
-
-        comment.user = map_author(comment.extra.orig_user, 'comment')
+        comment = get_gcode_comment(issue, comment_pq)
         issue.extra.comments.append(comment)
 
     return issue
