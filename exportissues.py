@@ -203,6 +203,26 @@ MARKDOWN_DATE = gt('2009-04-20T19:00:00Z')
 # vs textile:
 #    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
 
+def format_user(ns, kind='user'):
+    if not kind.startswith('orig_'):
+        user = getattr(ns, kind, None)
+        if user:
+            return "@".format(user)  # GitHub @mention
+        kind = 'orig_' + kind
+
+    if not hasattr(ns, kind):
+        ns = ns.extra
+    orig_user = getattr(ns, kind)
+    return "**{}**{}{}".format(*orig_user.partition('@'))
+
+def format_list(lst, fmt='{}', last_sep=', '):
+    lst = map(fmt.format, lst)
+    but_tail = ', '.join(lst[:-1])
+    last_pair = lst[-1:]
+    if but_tail:
+        last_pair.insert(0, but_tail)
+    return last_sep.join(last_pair)
+
 def format_message(m, comment_nr=0):
     is_issue = (comment_nr == 0)
 
@@ -210,26 +230,81 @@ def format_message(m, comment_nr=0):
     if options.issues_link:
         i_tmpl += ':' + options.issues_link + '/{}'
 
-    m.body = ''.join(filter_unicode(m.body))
-    m.body, refs = fixup_refs(m.body)
+    m.body, refs = fixup_refs(''.join(filter_unicode(m.body)))
 
     if gt(m.created_at) >= MARKDOWN_DATE:
-        m.body = ''.join(gen_md_body(m.extra.paragraphs)).strip()
-        m.body += "\r\n"
+        m.body = header = footer = ''
+
+        if not m.user:
+            m.body += ("{} by {}\r\n<hr/>\r\n"
+                      .format('Reported' if is_issue else 'Comment',
+                              format_user(m, 'orig_user')))
+
+        body = ''.join(gen_md_body(m.extra.paragraphs)).strip()
+        if body:
+            m.body += body + "\r\n"
 
         if is_issue:
-            m.body += ("Original issue for #" + str(m.number) + ": " +
-                       m.extra.link + "\r\n" +
-                       "Original author: " + m.extra.orig_user + "\r\n")
-        if refs:
-            m.body += ("Referenced issues: " +
-                              ", ".join("#" + str(i) for i in refs) + "\r\n")
-        if is_issue:
-            if m.extra.orig_owner:
-                m.body += ("Original owner: " + m.extra.orig_owner + "\r\n")
+            if not m.assignee and m.extra.orig_owner:
+                footer += "> Originally assigned to {s_orig_owner}\r\n"
+                s_orig_owner = format_user(m, 'orig_owner')
         else:
-            m.body += ("Original comment: " + m.extra.link + "\r\n")
-            m.body += ("Original author: " + m.extra.orig_user + "\r\n")
+            u = m.extra.updates
+
+            if u.orig_owner == '---':
+                footer += "> Unassigned\r\n"
+            elif u.orig_owner:
+                footer += "> Assigned to {s_orig_owner}\r\n"
+                s_orig_owner = format_user(u, 'owner')
+
+            if u.status in CLOSED_STATES:
+                footer += "> Closed with status **{u.status}**\r\n"
+            elif u.status:
+                footer += "> Reopened, status set to **{u.status}**\r\n"
+
+            if u.mergedinto == '---':
+                footer += "> Unmerged\r\n"
+            elif u.mergedinto:
+                footer += "> Merged into **#{u.mergedinto}**\r\n"
+
+            if u.old_milestone and u.new_milestone:
+                footer += ("> Moved from the **{u.old_milestone}** milestone "
+                           "to **{u.new_milestone}**\r\n")
+            elif u.old_milestone:
+                footer += "> Removed from the **{u.old_milestone}** milestone\r\n"
+            elif u.new_milestone:
+                footer += "> Added to the **{u.new_milestone}** milestone\r\n"
+
+            s_old_blocking = format_list(u.old_blocking, '**#{}**', ' or ')
+            s_new_blocking = format_list(u.new_blocking, '**#{}**', ' and ')
+            if s_old_blocking:
+                footer += "> No more blocking {s_old_blocking}\r\n"
+            if s_new_blocking:
+                footer += "> Blocking {s_new_blocking}\r\n"
+
+            s_old_blockedon = format_list(u.old_blockedon, '**#{}**', ' or ')
+            s_new_blockedon = format_list(u.new_blockedon, '**#{}**', ' and ')
+            if s_old_blockedon:
+                footer += "> No more blocked on {s_old_blockedon}\r\n"
+            if s_new_blockedon:
+                footer += "> Blocked on {s_new_blockedon}\r\n"
+
+            s_new_labels = format_list(u.new_labels, '**`{}`**')
+            s_old_labels = format_list(u.old_labels, '**`{}`**')
+            s_labels_plural = 's' * (len(u.new_labels) + len(u.old_labels) > 1)
+            if s_new_labels and s_old_labels:
+                footer += ("> Added {s_new_labels} and "
+                           "removed {s_old_labels} labels\r\n")
+            elif s_new_labels:
+                footer += "> Added {s_new_labels} label{s_labels_plural}\r\n"
+            elif s_old_labels:
+                footer += "> Removed {s_old_labels} label{s_labels_plural}\r\n"
+
+        footer = footer.format(**locals()).strip()
+        if footer:
+            m.body += footer
+
+        m.body = m.body.strip()
 
     else:
         m.body = "bc.. " + m.body + "\r\n"
