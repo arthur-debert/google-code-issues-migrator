@@ -378,13 +378,11 @@ def map_author(gc_uid, kind=None):
         for email, gh_user in matches:
             output('\t{email}'.format(**locals()))
     elif matches:
-        if options.verbose > 1:
-            output("{:<10}    {:>22} -> {:>32}:   {:<16}\n"
-                   .format(kind, gc_uid, *matches[0]), level=2)
+        output("{:<10}    {:>22} -> {:>32}:   {:<16}\n"
+               .format(kind, gc_uid, *matches[0]), level=3)
         return matches[0][1]
 
-    if options.verbose > 1:
-        output("{:<10}!!! {:>22}\n".format(kind, gc_uid), level=2)
+    output("{:<10}!!! {:>22}\n".format(kind, gc_uid), level=2)
 
     return options.fallback_user
 
