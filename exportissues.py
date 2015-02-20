@@ -697,10 +697,7 @@ if __name__ == "__main__":
     parser.add_option('--imported-label', dest = 'imported_label', help = 'A label to mark all imported issues', default = 'imported', type = str)
     parser.add_option('--fallback-user', dest = 'fallback_user', help = 'Default username for unknown users', default = None, type = str)
     parser.add_option('-d', '--dump-messages', action = 'store_true', dest = 'dump', help = 'Dump text into a file used afterwards to override messages', default = False)
-    parser.add_option("-s", "--silent", action = "store_false", dest = "verbose",
-                      help = "Output critical messages only")
-    parser.add_option("-v", "--verbose", action = "count", dest = "verbose",
-                      help = "Verbosity level (-v to -vvv)", default = 1)
+    parser.add_option('-v', '--verbose', action = 'count', dest = 'verbose', help = 'Verbosity level (-v to -vvv)', default = 0)
 
     options, args = parser.parse_args()
 
