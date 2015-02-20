@@ -205,8 +205,8 @@ def format_md_comment_updates(u):
     if u.orig_owner == '---':
         emit("Unassigned")
     elif u.orig_owner:
-        emit("Assigned to {s_orig_owner}")
-        s_orig_owner = format_user(u, 'owner')
+        emit("Assigned to {s_owner}")
+        s_owner = format_user(u, 'owner')
 
     if u.status in CLOSED_STATES:
         emit("Closed with status **{u.status}**")
@@ -262,7 +262,7 @@ def format_user(ns, kind='user'):
     if not kind.startswith('orig_'):
         user = getattr(ns, kind, None)
         if user:
-            return "@".format(user)  # GitHub @mention
+            return '@' + user  # GitHub @mention
         kind = 'orig_' + kind
 
     if not hasattr(ns, kind):
