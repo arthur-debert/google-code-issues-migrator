@@ -189,7 +189,7 @@ def format_md_user(ns, kind='user'):
     return "**{}**{}{}".format(*orig_user.partition('@'))
 
 
-def format_md_body_lines(paragraphs):
+def format_md_body(paragraphs):
     lines = []
     for title, body in paragraphs:
         for line in title.splitlines():
@@ -206,7 +206,7 @@ def format_md_body_lines(paragraphs):
     return '\r\n'.join(lines).strip()
 
 
-def format_md_comment_updates(u):
+def format_md_updates(u):
     lines = []
     emit = lines.append
 
@@ -273,14 +273,14 @@ def format_markdown(m, comment_nr=0):
     try:
         body = messages[msg_id].strip()
     except KeyError:
-        body = messages[msg_id] = format_md_body_lines(m.extra.paragraphs)
+        body = messages[msg_id] = format_md_body(m.extra.paragraphs)
 
     if is_issue:
         if not m.assignee and m.extra.orig_owner:
             footer = ("> Originally assigned to {s_orig_owner}"
                       .format(s_orig_owner=format_md_user(m, 'orig_owner')))
     else:
-        footer = format_md_comment_updates(m.extra.updates)
+        footer = format_md_updates(m.extra.updates)
 
     def gen_msg_blocks():
         if header: yield header
@@ -458,7 +458,7 @@ def init_message(m, pquery):
     m.body = join_paragraphs(paragraphs)
 
 
-def get_gcode_comment_updates(issue, updates_pq):
+def get_gcode_updates(issue, updates_pq):
     updates = Namespace(
         orig_owner    = None,
         owner         = None,
@@ -527,7 +527,7 @@ def get_gcode_comment(issue, comment_pq):
 
     comment.extra(
         link       = issue.extra.link + '#' + comment_pq('a').attr('name'),
-        updates    = get_gcode_comment_updates(issue, comment_pq('.updates .box-inner')))
+        updates    = get_gcode_updates(issue, comment_pq('.updates .box-inner')))
 
     init_message(comment, comment_pq('pre'))
 
