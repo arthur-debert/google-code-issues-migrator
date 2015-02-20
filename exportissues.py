@@ -415,20 +415,20 @@ def split_paragraphs(pquery):
         is_str = isinstance(paragraph, basestring)
         if not is_str:
             paragraph = pq(paragraph)
-        text = (paragraph if is_str else paragraph.text()).strip()
+        text = (paragraph if is_str else paragraph.text())
         if not text:
             continue
         is_title = not is_str and paragraph.is_('b')
         if is_title == was_title:
             accum_text += text
             continue
-        if was_title is not None:
-            paragraphs.append((accum_text, was_title))
+        if was_title is not None and accum_text.strip():
+            paragraphs.append((accum_text.strip(), was_title))
         accum_text = text
         was_title = is_title
     else:
-        if was_title is not None:
-            paragraphs.append((accum_text, was_title))
+        if was_title is not None and accum_text.strip():
+            paragraphs.append((accum_text.strip(), was_title))
 
     return paragraphs
 
