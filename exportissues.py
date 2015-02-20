@@ -43,13 +43,13 @@ GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
 
 GOOGLE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
 
-# Format with (google_project_name, issue nr/re)
+# Format with google_project_name
 GOOGLE_ISSUE_RE_TMPL = r'''(?x)
-    (?: (?: (?<= \*\*Blocking:\*\* )
-          | (?<= \*\*Blockedon:\*\* )
-          | (?<= \*\*Mergedinto:\*\* ) ) \s* (?:{0}:)?
-      | https?://code\.google\.com/p/{0}/issues/detail\?id=
-      | (?i) issue[ #]* ) ({1})'''
+    (?: (?: (?<![\w-])[Ii]ssue[\s#-]*
+            (?: \d+ \s+ )?
+            https?://code\.google\.com/p/{0}/issues/detail\?id= )
+      | (?<![\w-])[Ii]ssue[\s#-]* )
+    (\d+)'''
 
 # Mapping from Google Code issue labels to Github labels
 LABEL_MAPPING = {
@@ -144,21 +144,15 @@ def gt(dt_str):
     return datetime.strptime(dt_str.rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
 
 
-def extract_refs(s):
-    r = GOOGLE_ISSUE_RE_TMPL.format(google_project_name, r'[0-9]+')
-    return set(map(int, re.findall(r, s)))
-
-def fix_gc_issue_n(s, on, nn):
-    r = GOOGLE_ISSUE_RE_TMPL.format(google_project_name, on)
-    return re.sub(r, '#'+str(nn), s)
-
-def fixup_refs(s):
+def fixup_refs(s, add_ref=None):
     delta = (options.issues_start_from - 1)
-    refs = extract_refs(s)
-    for ref in refs:
-        s = fix_gc_issue_n(s, ref, ref + delta)
-    refs = set(ref + delta for ref in refs)
-    return s, refs
+    def fix_ref(match):
+        ref = '#' + str(int(match.group(1)) + delta)
+        if add_ref is not None:
+            add_ref(ref)
+        return ref
+    pat = GOOGLE_ISSUE_RE_TMPL.format(google_project_name)
+    return re.sub(pat, fix_ref, s)
 
 
 def reindent(s, n=4):
@@ -302,9 +296,7 @@ def format_textile(m, comment_nr=0):
     if options.issues_link:
         i_tmpl += ':' + options.issues_link + '/{0}'
 
-    body, refs = fixup_refs(''.join(filter_unicode(m.body)))
-
-    body = "bc.. " + body + "\r\n"
+    body = "bc.. " + m.body + "\r\n"
 
     if is_issue:
         body += ("\r\n" +
@@ -314,9 +306,10 @@ def format_textile(m, comment_nr=0):
                    m.extra.link + "\r\n\r\n" +
                    "p. Original author: " + '"' + m.extra.orig_user +
                    '":' + m.extra.orig_user + "\r\n")
-    if refs:
+    if m.extra.refs:
         body += ("\r\np. Referenced issues: " +
-                   ", ".join(i_tmpl.format(i) for i in refs) +
+                   ", ".join(i_tmpl.format(i[1:]) for i in m.extra.refs
+                             if i.startswith('#')) +
                    "\r\n")
     if is_issue:
         if m.extra.orig_owner:
