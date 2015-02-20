@@ -828,6 +828,8 @@ if __name__ == "__main__":
                 for msg_id, body in sorted(messages.iteritems()):
                     if not msg_id:
                         continue
+                    if not body.strip():
+                        continue
                     f.write('====()===={{}}====[]==== {}\n'.format(msg_id))
                     f.write(body.strip())
                     f.write('\n\n')
