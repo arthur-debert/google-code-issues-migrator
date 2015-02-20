@@ -183,18 +183,18 @@ def filter_unicode(s):
 
 def format_md_body_lines(paragraphs):
     lines = []
-    for text, is_title in paragraphs:
-        if is_title:
-            text = "\r\n##### " + ' '.join(line.strip() for line in text.splitlines())
+    for title, body in paragraphs:
+        for line in title.splitlines():
+            lines.append("\r\n##### " + line)
+
+        if "```" not in body:
+            body = "```\r\n" + body + "\r\n```"
         else:
-            if "```" not in text:
-                text = "```\r\n" + text + "\r\n```"
-            else:
-                output(" FIXME: triple quotes in {} body: {}"
-                       .format('issue' if is_issue else 'comment ' + comment_nr,
-                               text))
-                text = reindent(text)
-        lines.append(text)
+            output(" FIXME: triple quotes in {} body: {}"
+                   .format('issue' if is_issue else 'comment ' + comment_nr,
+                           body))
+            body = reindent(body)
+        lines.append(body)
     return '\r\n'.join(lines).strip()
 
 
@@ -406,31 +406,43 @@ def add_label_get_milestone(label, labels, issue):
     if label and label not in labels:
         labels.append(label)
 
-def split_paragraphs(pquery):
+
+def split_into_paragraphs(pquery, title_selector='b'):
     paragraphs = []
 
     was_title = None
+    title = ''
     accum_text = ''
+
     for paragraph in pquery.contents():
         is_str = isinstance(paragraph, basestring)
-        if not is_str:
-            paragraph = pq(paragraph)
-        text = (paragraph if is_str else paragraph.text())
+        text = (paragraph if is_str else (paragraph.text or '').strip())
         if not text:
             continue
-        is_title = not is_str and paragraph.is_('b')
+        is_title = not is_str and pq(paragraph).is_(title_selector)
         if is_title == was_title:
             accum_text += text
             continue
-        if was_title is not None and accum_text.strip():
-            paragraphs.append((accum_text.strip(), was_title))
+        if was_title is not None:
+            accum_text = accum_text.strip()
+            if was_title:
+                title = accum_text
+            else:
+                paragraphs.append((title, accum_text))
         accum_text = text
         was_title = is_title
     else:
-        if was_title is not None and accum_text.strip():
-            paragraphs.append((accum_text.strip(), was_title))
+        if was_title is not None:
+            accum_text = accum_text.strip()
+            if was_title:
+                title = accum_text
+                accum_text = ''
+            paragraphs.append((title, accum_text))
 
     return paragraphs
+
+def join_paragraphs(paragraphs):
+    return '\n\n'.join(title + '\n' + body for title, body in paragraphs).strip()
 
 
 def get_gcode_comment_updates(issue, updates_pq):
@@ -448,28 +460,26 @@ def get_gcode_comment_updates(issue, updates_pq):
         new_labels    = [],
         old_labels    = [])
 
-    for text, is_title in split_paragraphs(updates_pq):
-        if is_title:
-            title = text.partition(':')[0]
-            continue
+    for key, value in split_into_paragraphs(updates_pq):
+        key = key.partition(':')[0]
 
-        if title in ('Blockedon', 'Blocking', 'Labels'):
-            new_lst = updates.__dict__['new_'+title.lower()]
-            old_lst = updates.__dict__['old_'+title.lower()]
+        if key in ('Blockedon', 'Blocking', 'Labels'):
+            new_lst = updates.__dict__['new_'+key.lower()]
+            old_lst = updates.__dict__['old_'+key.lower()]
 
-            for word in text.split():
+            for word in value.split():
                 is_removed = word.startswith('-')
                 if is_removed:
                     word = word[1:]
                 lst = (old_lst if is_removed else new_lst)
 
-                if title in ('Blockedon', 'Blocking'):
+                if key in ('Blockedon', 'Blocking'):
                     ref_text = word.rpartition(':')[-1]
                     ref = int(ref_text) + (options.issues_start_from - 1)
                     if ref not in lst:
                         lst.append(ref)
 
-                elif title == 'Labels':
+                elif key == 'Labels':
                     milestone = add_label_get_milestone(word, lst, issue)
                     if milestone:
                         if is_removed:
@@ -480,15 +490,15 @@ def get_gcode_comment_updates(issue, updates_pq):
             for el in set(old_lst) & set(new_lst):
                 old_lst.remove(el)
 
-        if title == 'Owner':
-            updates.orig_owner = text
-            updates.owner = map_author(text, 'owner')
+        if key == 'Owner':
+            updates.orig_owner = value
+            updates.owner = map_author(value, 'owner')
 
-        elif title == 'Status':
-            updates.status = text
+        elif key == 'Status':
+            updates.status = value
 
-        elif title == 'Mergedinto':
-            ref_text = text.rpartition(':')[-1]
+        elif key == 'Mergedinto':
+            ref_text = value.rpartition(':')[-1]
             if ref_text:
                 updates.mergedinto = int(ref_text) + (options.issues_start_from - 1)
             else:
@@ -506,18 +516,15 @@ def get_gcode_comment(issue, comment_pq):
         link       = issue.extra.link + '#' + comment_pq('a').attr('name'),
         updates    = get_gcode_comment_updates(issue, comment_pq('.updates .box-inner')))
 
-    try:
-        body = comment_pq('pre').text().strip()
-    except UnicodeDecodeError:
-        body = u'FIXME: UnicodeDecodeError'
-        output("issue %d FIXME: UnicodeDecodeError\n" % issue.number)
-    else:
-        # Strip the placeholder text if there's any other updates
-        if body == '(No comment was entered for this change.)':
-            body = ''
+    paragraphs = comment.extra.paragraphs = split_into_paragraphs(comment_pq('pre'))
+    if len(paragraphs) > 1 or paragraphs and paragraphs[0][0]:
+        output("issue %d FIXME: unexpected paragraph structure in issue comment\n" % issue.number)
 
-    comment.extra.paragraphs = [(body, False)] if body else []
-    comment.body = body
+    # Strip the placeholder text if there's any other updates
+    if paragraphs and paragraphs[0][1] == '(No comment was entered for this change.)':
+        del paragraphs[:]
+
+    comment.body = join_paragraphs(paragraphs)
 
     comment.extra.orig_user  = comment_pq('.userlink').text()
     comment.user = map_author(comment.extra.orig_user, 'comment')
@@ -578,7 +585,8 @@ def get_gcode_issue(issue_summary):
 
     issue_pq = doc('.issuedescription .issuedescription')
 
-    issue.extra.paragraphs = split_paragraphs(issue_pq('pre'))
+    paragraphs = issue.extra.paragraphs = split_into_paragraphs(issue_pq('pre'))
+    issue.body = join_paragraphs(paragraphs)
     issue.body = issue_pq('pre').text()
 
     issue.extra.comments = []
