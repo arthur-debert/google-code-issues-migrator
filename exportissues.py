@@ -217,7 +217,10 @@ def format_md_updates(u):
         s_owner = format_md_user(u, 'owner')
 
     if u.status in CLOSED_STATES:
-        emit("Closed with status **{u.status}**")
+        if u.close_commit:
+            emit("Closed in **{u.close_commit}**")
+        else:
+            emit("Closed with status **{u.status}**")
     elif u.status:
         emit("Reopened, status set to **{u.status}**")
 
@@ -225,6 +228,9 @@ def format_md_updates(u):
         emit("Unmerged")
     elif u.mergedinto:
         emit("Merged into **#{u.mergedinto}**")
+
+    if u.merged_issue:
+        emit("Issue **#{u.merged_issue}** has been merged into this issue")
 
     if u.old_milestone and u.new_milestone:
         emit("Moved from the **{u.old_milestone}** milestone to **{u.new_milestone}**")
@@ -449,6 +455,24 @@ def init_message(m, pquery):
                   for pair in split_into_paragraphs(pquery)]
 
     # Strip the placeholder text, if any
+    if len(paragraphs) == 1 and hasattr(m.extra, 'updates'):
+        body = paragraphs[0][1]
+        if body == '(No comment was entered for this change.)':
+            del paragraphs[0]
+
+        if body.startswith('Set review issue status to:'):
+            del paragraphs[0]
+
+        close_commit = re.match(r'This issue was closed by revision r(\d+)\.', body)
+        if close_commit:
+            m.extra.updates.close_commit = close_commit.group(1)
+            del paragraphs[0]
+
+        merged_issue = re.match(r'#(\d+) has been merged into this issue\.', body)
+        if merged_issue:
+            m.extra.updates.merged_issue = merged_issue.group(1)
+            del paragraphs[0]
+
     if (len(paragraphs) == 1 and
         paragraphs[0][1] == '(No comment was entered for this change.)'):
         del paragraphs[0]
@@ -471,7 +495,9 @@ def get_gcode_updates(issue, updates_pq):
         new_blocking  = [],
         old_blocking  = [],
         new_labels    = [],
-        old_labels    = [])
+        old_labels    = [],
+        merged_issue  = None,
+        close_commit  = None)
 
     for key, value in split_into_paragraphs(updates_pq):
         key = key.partition(':')[0]
