@@ -360,7 +360,7 @@ def map_author(gc_uid, kind=None):
     email_pat = gc_uid
     if '@' not in email_pat:
         email_pat += '@gmail.com'
-    email_pat = email_pat.replace('.', r'\.').replace(r'\.\.\.@', r'[\w.]+@')
+    email_pat = re.escape(email_pat).replace(r'\.\.\.\@', r'[\w.]+\@')
     email_re = re.compile(email_pat, re.I)
 
     matches = []
