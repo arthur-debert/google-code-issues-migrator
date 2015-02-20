@@ -443,6 +443,21 @@ def join_paragraphs(paragraphs):
     return '\n\n'.join(title + '\n' + body for title, body in paragraphs).strip()
 
 
+def init_message(m, pquery):
+    refs = set()
+    paragraphs = [tuple(fixup_refs(text, add_ref=refs.add) for text in pair)
+                  for pair in split_into_paragraphs(pquery)]
+
+    # Strip the placeholder text, if any
+    if (len(paragraphs) == 1 and
+        paragraphs[0][1] == '(No comment was entered for this change.)'):
+        del paragraphs[0]
+
+    m.extra.refs = refs
+    m.extra.paragraphs = paragraphs
+    m.body = join_paragraphs(paragraphs)
+
+
 def get_gcode_comment_updates(issue, updates_pq):
     updates = Namespace(
         orig_owner    = None,
@@ -514,15 +529,12 @@ def get_gcode_comment(issue, comment_pq):
         link       = issue.extra.link + '#' + comment_pq('a').attr('name'),
         updates    = get_gcode_comment_updates(issue, comment_pq('.updates .box-inner')))
 
-    paragraphs = comment.extra.paragraphs = split_into_paragraphs(comment_pq('pre'))
+    init_message(comment, comment_pq('pre'))
+
+    paragraphs = comment.extra.paragraphs
     if len(paragraphs) > 1 or paragraphs and paragraphs[0][0]:
-        output("issue %d FIXME: unexpected paragraph structure in issue comment\n" % issue.number)
-
-    # Strip the placeholder text if there's any other updates
-    if paragraphs and paragraphs[0][1] == '(No comment was entered for this change.)':
-        del paragraphs[:]
-
-    comment.body = join_paragraphs(paragraphs)
+        output("FIXME: unexpected paragraph structure in {}\n"
+               .format(comment.link))
 
     comment.extra.orig_user  = comment_pq('.userlink').text()
     comment.user = map_author(comment.extra.orig_user, 'comment')
@@ -583,9 +595,7 @@ def get_gcode_issue(issue_summary):
 
     issue_pq = doc('.issuedescription .issuedescription')
 
-    paragraphs = issue.extra.paragraphs = split_into_paragraphs(issue_pq('pre'))
-    issue.body = join_paragraphs(paragraphs)
-    issue.body = issue_pq('pre').text()
+    init_message(issue, issue_pq('pre'))
 
     issue.extra.comments = []
     for comment_pq in map(pq, doc('.issuecomment')):
