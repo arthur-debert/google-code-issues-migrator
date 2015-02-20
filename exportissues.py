@@ -78,6 +78,7 @@ CLOSED_STATES = [
     'Done'
 ]
 
+
 class Namespace(object):
     """
     Backport of SimpleNamespace() class added in Python 3.3
@@ -181,6 +182,29 @@ def filter_unicode(s):
         else:
             yield ch
 
+
+def format_list(lst, fmt='{}', last_sep=', '):
+    lst = map(fmt.format, lst)
+    but_tail = ', '.join(lst[:-1])
+    last_pair = lst[-1:]
+    if but_tail:
+        last_pair.insert(0, but_tail)
+    return last_sep.join(last_pair)
+
+
+def format_md_user(ns, kind='user'):
+    if not kind.startswith('orig_'):
+        user = getattr(ns, kind, None)
+        if user:
+            return '@' + user  # GitHub @mention
+        kind = 'orig_' + kind
+
+    if not hasattr(ns, kind):
+        ns = ns.extra
+    orig_user = getattr(ns, kind)
+    return "**{}**{}{}".format(*orig_user.partition('@'))
+
+
 def format_md_body_lines(paragraphs):
     lines = []
     for title, body in paragraphs:
@@ -206,7 +230,7 @@ def format_md_comment_updates(u):
         emit("Unassigned")
     elif u.orig_owner:
         emit("Assigned to {s_owner}")
-        s_owner = format_user(u, 'owner')
+        s_owner = format_md_user(u, 'owner')
 
     if u.status in CLOSED_STATES:
         emit("Closed with status **{u.status}**")
@@ -251,94 +275,85 @@ def format_md_comment_updates(u):
 
     return '\r\n'.join('> {}'.format(line) for line in lines).format(**locals())
 
-MARKDOWN_DATE = gt('2009-04-20T19:00:00Z')
-# markdown:
-#    http://daringfireball.net/projects/markdown/syntax
-#    http://github.github.com/github-flavored-markdown/
-# vs textile:
-#    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
-
-def format_user(ns, kind='user'):
-    if not kind.startswith('orig_'):
-        user = getattr(ns, kind, None)
-        if user:
-            return '@' + user  # GitHub @mention
-        kind = 'orig_' + kind
-
-    if not hasattr(ns, kind):
-        ns = ns.extra
-    orig_user = getattr(ns, kind)
-    return "**{}**{}{}".format(*orig_user.partition('@'))
-
-def format_list(lst, fmt='{}', last_sep=', '):
-    lst = map(fmt.format, lst)
-    but_tail = ', '.join(lst[:-1])
-    last_pair = lst[-1:]
-    if but_tail:
-        last_pair.insert(0, but_tail)
-    return last_sep.join(last_pair)
-
-def format_message(m, comment_nr=0):
+def format_markdown(m, comment_nr=0):
     is_issue = (comment_nr == 0)
 
-    i_tmpl = '"#{}"'
-    if options.issues_link:
-        i_tmpl += ':' + options.issues_link + '/{}'
+    header = footer = ''
 
-    m.body, refs = fixup_refs(''.join(filter_unicode(m.body)))
+    if not m.user:
+        header = ("<sup>{} by {}</sup>\r\n"
+                  .format('Reported' if is_issue else 'Comment',
+                          format_md_user(m, 'orig_user')))
+
+    msg_id = m.extra.link
+    try:
+        body = messages[msg_id].strip()
+    except KeyError:
+        body = messages[msg_id] = format_md_body_lines(m.extra.paragraphs)
+
+    if is_issue:
+        if not m.assignee and m.extra.orig_owner:
+            footer = ("> Originally assigned to {s_orig_owner}"
+                      .format(s_orig_owner=format_md_user(m, 'orig_owner')))
+    else:
+        footer = format_md_comment_updates(m.extra.updates)
+
+    def gen_msg_blocks():
+        if header: yield header
+        if body:   yield body
+        if footer: yield footer
+
+    return '\r\n'.join(gen_msg_blocks())
+
+def format_textile(m, comment_nr=0):
+    is_issue = (comment_nr == 0)
+
+    i_tmpl = '"#{0}"'
+    if options.issues_link:
+        i_tmpl += ':' + options.issues_link + '/{0}'
+
+    body, refs = fixup_refs(''.join(filter_unicode(m.body)))
+
+    body = "bc.. " + body + "\r\n"
+
+    if is_issue:
+        body += ("\r\n" +
+                   "p. Original issue for " +
+                   i_tmpl.format(m.number) + ": " +
+                   '"' + m.extra.link + '":' +
+                   m.extra.link + "\r\n\r\n" +
+                   "p. Original author: " + '"' + m.extra.orig_user +
+                   '":' + m.extra.orig_user + "\r\n")
+    if refs:
+        body += ("\r\np. Referenced issues: " +
+                   ", ".join(i_tmpl.format(i) for i in refs) +
+                   "\r\n")
+    if is_issue:
+        if m.extra.orig_owner:
+            body += ("\r\np. Original owner: " +
+                       '"' + m.extra.orig_owner + '":' + m.extra.orig_owner + "\r\n")
+    else:
+        body += ("\r\np. Original comment: " + '"' + m.extra.link +
+                   '":' + m.extra.link + "\r\n")
+        body += ("\r\np. Original author: " + '"' + m.extra.orig_user +
+                   '":' + m.extra.orig_user + "\r\n")
+
+    return body
+
+
+MARKDOWN_DATE = gt('2009-04-20T19:00:00Z')
+
+def format_message(m, comment_nr=0):
+    # markdown:
+    #    http://daringfireball.net/projects/markdown/syntax
+    #    http://github.github.com/github-flavored-markdown/
+    # vs textile:
+    #    http://txstyle.org/article/44/an-overview-of-the-textile-syntax
 
     if gt(m.created_at) >= MARKDOWN_DATE:
-        header = footer = ''
-
-        if not m.user:
-            header = ("<sup>{} by {}</sup>\r\n"
-                      .format('Reported' if is_issue else 'Comment',
-                              format_user(m, 'orig_user')))
-
-        msg_id = m.extra.link
-        try:
-            body = messages[msg_id].strip()
-        except KeyError:
-            body = messages[msg_id] = format_md_body_lines(m.extra.paragraphs)
-
-        if is_issue:
-            if not m.assignee and m.extra.orig_owner:
-                footer = ("> Originally assigned to {s_orig_owner}"
-                          .format(s_orig_owner=format_user(m, 'orig_owner')))
-        else:
-            footer = format_md_comment_updates(m.extra.updates)
-
-        def gen_msg_blocks():
-            if header: yield header
-            if body:   yield body
-            if footer: yield footer
-
-        m.body = '\r\n'.join(gen_msg_blocks())
-
+        m.body = format_markdown(m, comment_nr)
     else:
-        m.body = "bc.. " + m.body + "\r\n"
-
-        if is_issue:
-            m.body += ("\r\n" +
-                       "p. Original issue for " +
-                       i_tmpl.format(*[str(m.number)]*2) + ": " +
-                       '"' + m.extra.link + '":' +
-                       m.extra.link + "\r\n\r\n" +
-                       "p. Original author: " + '"' + m.extra.orig_user +
-                       '":' + m.extra.orig_user + "\r\n")
-        if refs:
-            m.body += ("\r\np. Referenced issues: " +
-                       ", ".join(i_tmpl.format(*[str(i)]*2) for i in refs) +
-                       "\r\n")
-        if is_issue:
-            if m.extra.orig_owner:
-                m.body += ("\r\np. Original owner: " +
-                           '"' + m.extra.orig_owner + '":' + m.extra.orig_owner + "\r\n")
-        else:
-            m.body += ("\r\np. Original comment: " + '"' + m.extra.link +
-                       '":' + m.extra.link + "\r\n")
-            m.body += ("\r\np. Original author: " + '"' + m.extra.orig_user +
-                       '":' + m.extra.orig_user + "\r\n")
+        m.body = format_textile(m, comment_nr)
 
     if len(m.body) >= 65534:
         m.body = "FIXME: too long issue body"
@@ -789,7 +804,9 @@ if __name__ == "__main__":
             pass
         try:
             with codecs.open("messages.txt", "w", encoding='utf-8') as f:
-                for msg_id, body in messages.iteritems():
+                # for msg_id, body in sorted(messages.iteritems(),
+                #                      key=lambda kv: (-len(kv[1].splitlines()), kv[0])):
+                for msg_id, body in sorted(messages.iteritems()):
                     if not msg_id:
                         continue
                     f.write('====()===={{}}====[]==== {}\n'.format(msg_id))
