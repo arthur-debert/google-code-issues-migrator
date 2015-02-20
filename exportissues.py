@@ -144,16 +144,6 @@ def gt(dt_str):
     return datetime.strptime(dt_str.rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
 
 
-def valid_email(s):
-    email = re.sub(r'^https:\/\/code\.google\.com\/u\/([^/]+)\/$', r'\1', s)
-    try:
-        int(email)
-    except ValueError:
-        if re.match(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4}$', email):
-            return email
-    return ''
-
-
 def extract_refs(s):
     r = GOOGLE_ISSUE_RE_TMPL.format(google_project_name, r'[0-9]+')
     return set(map(int, re.findall(r, s)))
