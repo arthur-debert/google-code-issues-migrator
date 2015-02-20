@@ -684,8 +684,7 @@ if __name__ == "__main__":
     parser = optparse.OptionParser(usage = usage,
                 description = "Export all issues from a Google Code project for a Github project.")
 
-    parser.add_option("-p", "--omit-priority", action = "store_true", dest = "omit_priority",
-                      help = "Don't migrate priority labels", default = False)
+    parser.add_option('--omit-priority', action = 'store_true', dest = 'omit_priority', help = "Don't migrate priority labels", default = False)
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
     parser.add_option('--end-at', dest = 'end_at', help = 'End at the given Google Code issue number', default = None, type = int)
@@ -696,7 +695,7 @@ if __name__ == "__main__":
     parser.add_option('--export-date', dest = 'updated_at', help = 'Date of export', default = None, type = str)
     parser.add_option('--imported-label', dest = 'imported_label', help = 'A label to mark all imported issues', default = 'imported', type = str)
     parser.add_option('--fallback-user', dest = 'fallback_user', help = 'Default username for unknown users', default = None, type = str)
-    parser.add_option('-d', '--dump-messages', action = 'store_true', dest = 'dump', help = 'Dump text into a file used afterwards to override messages', default = False)
+    parser.add_option('--dump-messages', action = 'store_true', dest = 'dump', help = 'Dump text into a file used afterwards to override messages', default = False)
     parser.add_option('-v', '--verbose', action = 'count', dest = 'verbose', help = 'Verbosity level (-v to -vvv)', default = 0)
 
     options, args = parser.parse_args()
