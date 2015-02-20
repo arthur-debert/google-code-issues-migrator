@@ -771,7 +771,7 @@ if __name__ == "__main__":
 
     if options.dump:
         try:
-            os.rename("messages.txt", "~messages.txt")
+            os.rename("messages.txt", "messages.txt-old")
         except OSError:
             pass
         try:
