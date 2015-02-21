@@ -695,6 +695,7 @@ if __name__ == "__main__":
     parser.add_option('--export-date', dest = 'updated_at', help = 'Date of export', default = None, type = str)
     parser.add_option('--imported-label', dest = 'imported_label', help = 'A label to mark all imported issues', default = 'imported', type = str)
     parser.add_option('--fallback-user', dest = 'fallback_user', help = 'Default username for unknown users', default = None, type = str)
+    parser.add_option('--commit-map', action = 'append', dest = 'commit_map_files', help = 'Map file(s) for revision references', default = [])
     parser.add_option('--dump-messages', action = 'store_true', dest = 'dump', help = 'Dump text into a file used afterwards to override messages', default = False)
     parser.add_option('-v', '--verbose', action = 'count', dest = 'verbose', help = 'Verbosity level (-v to -vvv)', default = 0)
 
@@ -778,6 +779,19 @@ if __name__ == "__main__":
         traceback.print_exc()
     except IOError:
         pass
+
+    commit_map = {}
+    for map_filename in reversed(options.commit_map_files):
+        tmp_map = commit_map
+        commit_map = {}
+        with open(map_filename, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                key, value = (s.strip() for s in line.split(None, 1))
+
+                commit_map[key] = tmp_map[value] if tmp_map else value
+
 
     if not options.updated_at:
         options.updated_at = datetime.fromtimestamp(int(time())).isoformat() + "Z"
