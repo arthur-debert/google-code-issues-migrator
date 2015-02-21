@@ -116,6 +116,7 @@ class ExtraNamespace(Namespace):
         self.__dict__.update(kwargs)
         self.extra = Namespace()
 
+
 def write_json(obj, filename):
     def namespace_to_dict(obj):
         if isinstance(obj, Namespace):
@@ -149,25 +150,6 @@ def gt(dt_str):
     return datetime.strptime(dt_str.rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
 
 
-def fixup_refs(s, add_ref=None):
-    def fix_ref(match):
-        if match.group('issue'):
-            ref = '#' + str(int(match.group('issue')) + (options.issues_start_from - 1))
-        else:
-            ref = match.group('commit')
-            if commit_map:
-                try:
-                    ref = commit_map[ref]
-                except KeyError:
-                    output('FIXME: ref {} not found in commit map'.format(ref))
-        print('>>>' + ref + '\t' + match.group())
-        if add_ref is not None:
-            add_ref(ref)
-        return ref
-
-    return re.sub(REF_RE_TMPL.format(google_project_name), fix_ref, s)
-
-
 def reindent(s, n=4):
     return "\n".join((n * " ") + i for i in s.splitlines())
 
@@ -179,6 +161,8 @@ def filter_unicode(s):
         else:
             yield ch
 
+
+###############################################################################
 
 def format_list(lst, fmt='{}', last_sep=', '):
     lst = map(fmt.format, lst)
@@ -375,52 +359,7 @@ def add_issue_to_github(issue):
     write_json(issue.extra.comments, "issues/{}.comments.json".format(issue.number))
 
 
-def map_author(gc_uid, kind=None):
-    email_pat = gc_uid
-    if '@' not in email_pat:
-        email_pat += '@gmail.com'
-    email_pat = re.escape(email_pat).replace(r'\.\.\.\@', r'[\w.]+\@')
-    email_re = re.compile(email_pat, re.I)
-
-    matches = []
-    for email, gh_user in authors.items():
-        if email_re.match(email):
-            matches.append((email, gh_user))
-    if len(matches) > 1:
-        output('FIXME: multiple matches for {gc_uid}'.format(**locals()))
-        for email, gh_user in matches:
-            output('\t{email}'.format(**locals()))
-    elif matches:
-        output("{:<10}    {:>22} -> {:>32}:   {:<16}\n"
-               .format(kind, gc_uid, *matches[0]), level=3)
-        return matches[0][1]
-
-    output("{:<10}!!! {:>22}\n".format(kind, gc_uid), level=2)
-
-    return options.fallback_user
-
-def add_label_get_milestone(label, labels, issue):
-    global milestones
-
-    if label.startswith('Priority-') and options.omit_priority:
-        return
-    if label.startswith('Milestone-'):
-        milestone_name = label[10:]
-        if not milestone_name:
-            return
-        try:
-            milestone = milestones[milestone_name]
-        except KeyError:
-            milestone = milestones[milestone_name] = Namespace(
-               number     = len(milestones) + options.milestones_start_from,
-               title      = milestone_name,
-               created_at = issue.created_at)
-        return milestone
-
-    label = LABEL_MAPPING.get(label, label)
-    if label and label not in labels:
-        labels.append(label)
-
+###############################################################################
 
 def split_into_paragraphs(pquery, title_selector='b'):
     paragraphs = []
@@ -460,6 +399,50 @@ def join_paragraphs(paragraphs):
     return '\n\n'.join(title + '\n' + body for title, body in paragraphs).strip()
 
 
+def map_author(gc_uid, kind=None):
+    email_pat = gc_uid
+    if '@' not in email_pat:
+        email_pat += '@gmail.com'
+    email_pat = re.escape(email_pat).replace(r'\.\.\.\@', r'[\w.]+\@')
+    email_re = re.compile(email_pat, re.I)
+
+    matches = []
+    for email, gh_user in authors.items():
+        if email_re.match(email):
+            matches.append((email, gh_user))
+    if len(matches) > 1:
+        output('FIXME: multiple matches for {gc_uid}'.format(**locals()))
+        for email, gh_user in matches:
+            output('\t{email}'.format(**locals()))
+    elif matches:
+        output("{:<10}    {:>22} -> {:>32}:   {:<16}\n"
+               .format(kind, gc_uid, *matches[0]), level=3)
+        return matches[0][1]
+
+    output("{:<10}!!! {:>22}\n".format(kind, gc_uid), level=2)
+
+    return options.fallback_user
+
+
+def fixup_refs(s, add_ref=None):
+    def fix_ref(match):
+        if match.group('issue'):
+            ref = '#' + str(int(match.group('issue')) + (options.issues_start_from - 1))
+        else:
+            ref = match.group('commit')
+            if commit_map:
+                try:
+                    ref = commit_map[ref]
+                except KeyError:
+                    output('FIXME: ref {} not found in commit map'.format(ref))
+        print('>>>' + ref + '\t' + match.group())
+        if add_ref is not None:
+            add_ref(ref)
+        return ref
+
+    return re.sub(REF_RE_TMPL.format(google_project_name), fix_ref, s)
+
+
 def init_message(m, pquery):
     refs = set()
     paragraphs = [tuple(fixup_refs(text, add_ref=refs.add) for text in pair)
@@ -491,6 +474,29 @@ def init_message(m, pquery):
     m.extra.refs = refs
     m.extra.paragraphs = paragraphs
     m.body = join_paragraphs(paragraphs)
+
+
+def add_label_get_milestone(label, labels, issue):
+    global milestones
+
+    if label.startswith('Priority-') and options.omit_priority:
+        return
+    if label.startswith('Milestone-'):
+        milestone_name = label[10:]
+        if not milestone_name:
+            return
+        try:
+            milestone = milestones[milestone_name]
+        except KeyError:
+            milestone = milestones[milestone_name] = Namespace(
+               number     = len(milestones) + options.milestones_start_from,
+               title      = milestone_name,
+               created_at = issue.created_at)
+        return milestone
+
+    label = LABEL_MAPPING.get(label, label)
+    if label and label not in labels:
+        labels.append(label)
 
 
 def get_gcode_updates(issue, updates_pq):
