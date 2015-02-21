@@ -44,12 +44,17 @@ GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
 GOOGLE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
 
 # Format with google_project_name
-GOOGLE_ISSUE_RE_TMPL = r'''(?x)
-    (?: (?: (?<![\w-])[Ii]ssue[\s#-]*
-            (?: \d+ \s+ )?
-            https?://code\.google\.com/p/{0}/issues/detail\?id= )
-      | (?<![\w-])[Ii]ssue[\s#-]* )
-    (\d+)'''
+REF_RE_TMPL = r'''(?x)
+    (?: (?: (?<!-)\b[Ii]ssue[ \t#-]*
+            (?: (?: \d+ \s+ )?
+                https?://code\.google\.com/p/{0}/issues/detail\?id= )? )
+        (?P<issue> \d+ )
+
+      | (?: \b(?:[Rr]ev(?:ision)?|[Cc]ommit)[ \t#-]*(\br(?=\d+\b))?
+            (?: (?: (?: \d+ | [0-9a-f]{{5,40}} ) \s+ )?
+                https?://code\.google\.com/p/{0}/source/detail\?r= )? )
+        (?P<commit> \d+ | [0-9a-f]{{5,40}} ) )\b
+'''
 
 # Mapping from Google Code issue labels to Github labels
 LABEL_MAPPING = {
@@ -145,14 +150,22 @@ def gt(dt_str):
 
 
 def fixup_refs(s, add_ref=None):
-    delta = (options.issues_start_from - 1)
     def fix_ref(match):
-        ref = '#' + str(int(match.group(1)) + delta)
+        if match.group('issue'):
+            ref = '#' + str(int(match.group('issue')) + (options.issues_start_from - 1))
+        else:
+            ref = match.group('commit')
+            if commit_map:
+                try:
+                    ref = commit_map[ref]
+                except KeyError:
+                    output('FIXME: ref {} not found in commit map'.format(ref))
+        print('>>>' + ref + '\t' + match.group())
         if add_ref is not None:
             add_ref(ref)
         return ref
-    pat = GOOGLE_ISSUE_RE_TMPL.format(google_project_name)
-    return re.sub(pat, fix_ref, s)
+
+    return re.sub(REF_RE_TMPL.format(google_project_name), fix_ref, s)
 
 
 def reindent(s, n=4):
@@ -461,7 +474,7 @@ def init_message(m, pquery):
         if body.startswith('Set review issue status to:'):
             del paragraphs[0]
 
-        close_commit = re.match(r'This issue was closed by revision r(\d+)\.', body)
+        close_commit = re.match(r'This issue was closed by ([0-9a-f]+)\.', body)
         if close_commit:
             m.extra.updates.close_commit = close_commit.group(1)
             del paragraphs[0]
