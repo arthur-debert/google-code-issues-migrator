@@ -742,6 +742,8 @@ if __name__ == "__main__":
         #
         with open("labels.txt", "r") as f:
             for line in f:
+                if not line.strip():
+                    continue
                 label, description = (s.strip() for s in line.split('=', 1))
                 kind, _, value = label.partition('-')
 
