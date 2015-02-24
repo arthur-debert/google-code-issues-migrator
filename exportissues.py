@@ -755,12 +755,17 @@ if __name__ == "__main__":
         msg_id = None
         with codecs.open("messages.txt", "r", encoding='utf-8') as f:
             for line in f:
-                if line.startswith('====()===={{}}====[]==== {}\n'.format(GOOGLE_ISSUES_URL)):
+                if line.startswith('====()===={{}}====[]==== {}'
+                                   .format(GOOGLE_ISSUES_URL
+                                           .format(google_project_name))):
                     msg_id = line.split()[1]
                 else:
                     messages[msg_id] = messages.get(msg_id, '') + line
+        messages.pop(None, None)
     except IOError:
         messages = {}
+    else:
+        output("Read {} overrides from messages.txt\n".format(len(messages)))
 
     try:
         process_gcode_issues()
