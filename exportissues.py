@@ -192,13 +192,14 @@ def format_md_body(paragraphs):
         for line in title.splitlines():
             lines.append("\r\n##### " + line)
 
-        if "```" not in body:
-            body = "```\r\n" + body + "\r\n```"
-        else:
-            output(" FIXME: triple quotes in {} body: {}"
-                   .format('issue' if is_issue else 'comment ' + comment_nr,
-                           body))
-            body = reindent(body)
+        if body:
+            if "```" not in body:
+                body = "```\r\n" + body + "\r\n```"
+            else:
+                output(" FIXME: triple quotes in {} body: {}"
+                       .format('issue' if is_issue else 'comment ' + comment_nr,
+                               body))
+                body = reindent(body)
         lines.append(body)
     return '\r\n'.join(lines).strip()
 
