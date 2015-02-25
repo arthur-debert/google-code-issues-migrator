@@ -45,15 +45,24 @@ GOOGLE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
 
 # Format with google_project_name
 REF_RE_TMPL = r'''(?x)
-    (?: (?: (?<!-)\b[Ii]ssue[ \t#-]*
-            (?: (?: \d+ \s+ )?
-                https?://code\.google\.com/p/{0}/issues/detail\?id= )? )
-        (?P<issue> \d+ )
+    ( (?P<issue>
+        (?<![?\-])\b[Ii]s[su]{{2}}e (?=\d*\b) [ \t#-]*
+      | (https?://)?code\.google\.com/p/{0}/issues/detail\? )+
 
-      | (?: \b(?:[Rr]ev(?:ision)?|[Cc]ommit)[ \t#-]*(\br(?=\d+\b))?
-            (?: (?: (?: \d+ | [0-9a-f]{{5,40}} ) \s+ )?
-                https?://code\.google\.com/p/{0}/source/detail\?r= )? )
-        (?P<commit> \d+ | [0-9a-f]{{5,40}} ) )\b
+    | (?P<commit>
+        \b([Rr]ev(ision)?|[Cc]ommit) (?=\d*\b) [ \t#-]*
+      | (\br(?=\d\d+\b))  # nobody cares about linking to the first ten commits :(
+      | (https?://)?code\.google\.com/p/{0}/source/detail\? )+
+
+    | (?P<link>
+        (https?://)?code\.google\.com/p/{0}/source/browse/
+        (?P<file> [\w\-\.~%!'"\@/]* ) \?? ) )
+
+    (?P<u>(?<=\?))?
+    ( (?(u)[&\w\-=%]*?\b(?(issue)id|r)=)
+      (?P<value> (?(issue)\d+|(\d+|\b[0-9a-f]{{7,40}})) )\b (?!=) )?
+    (?(u)[&\w\-=%]*)
+    (?(file)\#(?P<line>\d+))?
 '''
 
 # Mapping from Google Code issue labels to Github labels
@@ -427,18 +436,44 @@ def map_author(gc_uid, kind=None):
 
 def fixup_refs(s, add_ref=None):
     def fix_ref(match):
-        if match.group('issue'):
-            ref = '#' + str(int(match.group('issue')) + (options.issues_start_from - 1))
-        else:
-            ref = match.group('commit')
-            if commit_map:
+        ref = None
+
+        value = match.group('value')
+        if value or match.group('link'):
+
+            if match.group('issue'):
+                ref = '#' + str(int(value) + (options.issues_start_from - 1))
+            elif value and commit_map:
                 try:
-                    ref = commit_map[ref]
+                    ref = commit_map[value]
                 except KeyError:
-                    output('FIXME: ref {} not found in commit map'.format(ref))
-        print('>>>' + ref + '\t' + match.group())
+                    output('FIXME: rev {} not found in commit map\n'.format(value))
+
+            filename = match.group('file')
+            if filename:
+                branch = 'master'
+                pathfrags = filename.split('/')
+                if pathfrags[0] == 'trunk':
+                    del pathfrags[0]
+                    if pathfrags and pathfrags[0] == 'embox':
+                        del pathfrags[0]
+
+                elif pathfrags[0] in ('branches', 'tags') and len(pathfrags) > 1:
+                    branch = pathfrags[1]
+                    del pathfrags[:1]
+                filename = '/'.join(pathfrags)
+
+                ref = ('https://github.com/{}/blob/{}/{}'
+                       .format(options.github_project_name,
+                               ref or branch, filename))
+
+        if not ref:
+            return match.group()
+
         if add_ref is not None:
             add_ref(ref)
+
+        output('>>> {:>50}  {}\n'.format(ref, match.group()), level=3)
         return ref
 
     return re.sub(REF_RE_TMPL.format(google_project_name), fix_ref, s)
