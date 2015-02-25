@@ -199,18 +199,18 @@ def format_md_body(paragraphs):
     lines = []
     for title, body in paragraphs:
         for line in title.splitlines():
-            lines.append("\r\n##### " + line)
+            lines.append("\n##### " + line)
 
         if body:
             if "```" not in body:
-                body = "```\r\n" + body + "\r\n```"
+                body = "```\n" + body + "\n```"
             else:
                 output(" FIXME: triple quotes in {} body: {}"
                        .format('issue' if is_issue else 'comment ' + comment_nr,
                                body))
                 body = reindent(body)
         lines.append(body)
-    return '\r\n'.join(lines).strip()
+    return '\n'.join(lines).strip()
 
 
 def format_md_updates(u):
@@ -270,7 +270,7 @@ def format_md_updates(u):
     elif s_old_labels:
         emit("Removed {s_old_labels} label{s_labels_plural}")
 
-    return '\r\n'.join('> {}'.format(line) for line in lines).format(**locals())
+    return '\n'.join('> {}'.format(line) for line in lines).format(**locals())
 
 def format_markdown(m, comment_nr=0):
     is_issue = (comment_nr == 0)
@@ -278,7 +278,7 @@ def format_markdown(m, comment_nr=0):
     header = footer = ''
 
     if not m.user:
-        header = ("<sup>{} by {}</sup>\r\n"
+        header = ("<sup>{} by {}</sup>\n"
                   .format('Reported' if is_issue else 'Comment',
                           format_md_user(m, 'orig_user')))
 
@@ -300,7 +300,7 @@ def format_markdown(m, comment_nr=0):
         if body:   yield body
         if footer: yield footer
 
-    return '\r\n'.join(gen_msg_blocks())
+    return '\n'.join(gen_msg_blocks())
 
 def format_textile(m, comment_nr=0):
     is_issue = (comment_nr == 0)
@@ -309,30 +309,30 @@ def format_textile(m, comment_nr=0):
     if options.issues_link:
         i_tmpl += ':' + options.issues_link + '/{0}'
 
-    body = "bc.. " + m.body + "\r\n"
+    body = "bc.. " + m.body + "\n"
 
     if is_issue:
-        body += ("\r\n" +
+        body += ("\n" +
                    "p. Original issue for " +
                    i_tmpl.format(m.number) + ": " +
                    '"' + m.extra.link + '":' +
-                   m.extra.link + "\r\n\r\n" +
+                   m.extra.link + "\n\n" +
                    "p. Original author: " + '"' + m.extra.orig_user +
-                   '":' + m.extra.orig_user + "\r\n")
+                   '":' + m.extra.orig_user + "\n")
     if m.extra.refs:
-        body += ("\r\np. Referenced issues: " +
+        body += ("\np. Referenced issues: " +
                    ", ".join(i_tmpl.format(i[1:]) for i in m.extra.refs
                              if i.startswith('#')) +
-                   "\r\n")
+                   "\n")
     if is_issue:
         if m.extra.orig_owner:
-            body += ("\r\np. Original owner: " +
-                       '"' + m.extra.orig_owner + '":' + m.extra.orig_owner + "\r\n")
+            body += ("\np. Original owner: " +
+                       '"' + m.extra.orig_owner + '":' + m.extra.orig_owner + "\n")
     else:
-        body += ("\r\np. Original comment: " + '"' + m.extra.link +
-                   '":' + m.extra.link + "\r\n")
-        body += ("\r\np. Original author: " + '"' + m.extra.orig_user +
-                   '":' + m.extra.orig_user + "\r\n")
+        body += ("\np. Original comment: " + '"' + m.extra.link +
+                   '":' + m.extra.link + "\n")
+        body += ("\np. Original author: " + '"' + m.extra.orig_user +
+                   '":' + m.extra.orig_user + "\n")
 
     return body
 
