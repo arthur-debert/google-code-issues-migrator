@@ -24,8 +24,7 @@ from time import time
 from pyquery import PyQuery as pq
 
 # The maximum number of records to retrieve from Google Code in a single request
-
-GOOGLE_MAX_RESULTS = 25
+GOOGLE_MAX_RESULTS = 1000
 
 GOOGLE_ISSUES_URL = 'https://code.google.com/p/{}/issues'
 GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
@@ -689,18 +688,19 @@ def get_gcode_issue(issue_summary):
     return issue
 
 def get_gcode_issues():
-    count = 100
-    start_index = 0
     issues = []
     while True:
-        url = GOOGLE_ISSUES_CSV_URL.format(google_project_name, count, start_index)
-        issues.extend(row for row in csv.DictReader(urllib2.urlopen(url), dialect=csv.excel))
+        url = GOOGLE_ISSUES_CSV_URL.format(google_project_name,
+                                           GOOGLE_MAX_RESULTS, len(issues))
+        issues.extend(csv.DictReader(urllib2.urlopen(url), dialect=csv.excel))
 
         if issues and 'truncated' in issues[-1]['ID']:
             issues.pop()
-            start_index += count
         else:
-            return issues
+            break
+
+    output('Fetched summaries for {} issues\n'.format(len(issues)))
+    return issues
 
 
 def process_gcode_issues():
