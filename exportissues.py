@@ -739,21 +739,37 @@ if __name__ == "__main__":
     parser = optparse.OptionParser(usage = usage,
                 description = "Export all issues from a Google Code project for a Github project.")
 
-    parser.add_option('--omit-priority', action = 'store_true', dest = 'omit_priority', help = "Don't migrate priority labels", default = False)
-    parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
-    parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
-    parser.add_option('--end-at', dest = 'end_at', help = 'End at the given Google Code issue number', default = None, type = int)
-    parser.add_option('--issues-start-from', dest = 'issues_start_from', help = 'First issue number', default = 1, type = int)
-    parser.add_option('--milestones-start-from', dest = 'milestones_start_from', help = 'First milestone number', default = 1, type = int)
-    parser.add_option('--milestone-date-format', dest = 'milestone_date_format', help = 'Format of [date] for milestones from labels.txt', default = '%Y-%m-%d', type = str)
-    parser.add_option('--issues-link', dest = 'issues_link', help = 'Full link to issues page in the new repo', default = None, type = str)
-    parser.add_option('--export-date', dest = 'updated_at', help = 'Date of export', default = None, type = str)
-    parser.add_option('--imported-label', dest = 'imported_label', help = 'A label to mark all imported issues', default = 'imported', type = str)
-    parser.add_option('--fallback-user', dest = 'fallback_user', help = 'Default username for unknown users', default = None, type = str)
-    parser.add_option('--commit-map', action = 'append', dest = 'commit_map_files', help = 'Map file(s) for revision references', default = [])
-    parser.add_option('--dump-messages', action = 'store_true', dest = 'dump', help = 'Dump text into a file used afterwards to override messages', default = False)
-    parser.add_option('--github-project-name', dest = 'github_project_name', help = 'Used to create links to files referenced from issues', type = str)
-    parser.add_option('-v', '--verbose', action = 'count', dest = 'verbose', help = 'Verbosity level (-v to -vvv)', default = 0)
+    parser.add_option('--omit-priority', action='store_true', default=False,
+            help="Don't migrate priority labels")
+    parser.add_option('--skip-closed', action='store_true', default=False,
+            help='Skip all closed bugs')
+    parser.add_option('--start-at', type=int, default=None,
+            help='Start at the given Google Code issue number')
+    parser.add_option('--end-at', type=int, default=None,
+            help='End at the given Google Code issue number')
+    parser.add_option('--issues-start-from', type=int, default=1,
+            help='First issue number')
+    parser.add_option('--milestones-start-from', type=int, default=1,
+            help='First milestone number')
+    parser.add_option('--milestone-date-format', type=str, default='%Y-%m-%d',
+            help='Format of [date] for milestones from labels.txt')
+    parser.add_option('--issues-link', type=str, default=None,
+            help='Full link to issues page in the new repo')
+    parser.add_option('--export-date', dest='updated_at', type=str, default=None,
+            help='Date of export')
+    parser.add_option('--imported-label', type=str, default='imported',
+            help='A label to mark all imported issues')
+    parser.add_option('--fallback-user', type=str, default=None,
+            help='Default username for unknown users')
+    parser.add_option('--commit-map', action='append', default=[],
+            help='Map file(s) for revision references')
+    parser.add_option('--dump-messages', action='store_true', dest='dump', default=False,
+            help='Dump text into a file used afterwards to override messages')
+    parser.add_option('--github-project-name', type=str,
+            help='Used to create links to files referenced from issues')
+    parser.add_option('-v', '--verbose', action='count', default=0,
+            help='Verbosity level (-v to -vvv)')
+
 
     options, args = parser.parse_args()
 
@@ -842,7 +858,7 @@ if __name__ == "__main__":
         pass
 
     commit_map = {}
-    for map_filename in reversed(options.commit_map_files):
+    for map_filename in reversed(options.commit_map):
         tmp_map = commit_map
         commit_map = {}
         with open(map_filename, 'r') as f:
