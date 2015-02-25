@@ -717,6 +717,7 @@ if __name__ == "__main__":
     parser.add_option('--fallback-user', dest = 'fallback_user', help = 'Default username for unknown users', default = None, type = str)
     parser.add_option('--commit-map', action = 'append', dest = 'commit_map_files', help = 'Map file(s) for revision references', default = [])
     parser.add_option('--dump-messages', action = 'store_true', dest = 'dump', help = 'Dump text into a file used afterwards to override messages', default = False)
+    parser.add_option('--github-project-name', dest = 'github_project_name', help = 'Used to create links to files referenced from issues', type = str)
     parser.add_option('-v', '--verbose', action = 'count', dest = 'verbose', help = 'Verbosity level (-v to -vvv)', default = 0)
 
     options, args = parser.parse_args()
@@ -726,6 +727,11 @@ if __name__ == "__main__":
         sys.exit()
 
     google_project_name = args[0]
+
+    if not options.github_project_name:
+        options.github_project_name = '{0}/{0}'.format(google_project_name)
+        output("WARNING: GitHub project name is set to '{}'\n"
+               .format(options.github_project_name))
 
     try:
         with open("authors.json", "r") as f:
