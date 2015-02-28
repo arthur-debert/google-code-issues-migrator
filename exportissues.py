@@ -76,14 +76,6 @@ LABEL_MAPPING = {
     'Priority-Low'     : 'prio:low',
 }
 
-# Mapping from Google Code issue states to Github labels
-STATE_MAPPING = {
-    'valid': 'valid',
-    'invalid': 'invalid',
-    'duplicate': 'duplicate',
-    'wontfix': 'wontfix'
-}
-
 CLOSED_STATES = [
     'Fixed',
     'Verified',
@@ -651,23 +643,16 @@ def get_gcode_issue(issue_summary):
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
-    labels = []
+    issue.labels = []
     if options.imported_label:
-        labels.append(options.imported_label)
+        issue.labels.append(options.imported_label)
 
-    for label in issue_summary['AllLabels'].split(', '):
+    for label in issue_summary['AllLabels'].split(', ') + [issue_summary['Status']]:
         milestone = add_label_get_milestone(label, labels, issue)
         if milestone:
             if issue.state == 'open':
                 milestone.state = 'open'
             issue.milestone = milestone.number
-
-    # Add additional labels based on the issue's state
-    label = STATE_MAPPING.get(issue_summary['Status'].lower())
-    if label:
-        labels.append(label)
-
-    issue.labels = labels
 
     # Scrape the issue details page for the issue body and comments
     opener = urllib2.build_opener()
