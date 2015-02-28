@@ -1,11 +1,12 @@
 issues
 milestones
 
+config.ini
 messages.txt
 messages.txt-old
 authors.json
-authors.json-new
-labels.txt
+commits.map
+labels.ini
 
 # Python
 *.py[cod]

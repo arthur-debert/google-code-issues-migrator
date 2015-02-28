@@ -15,12 +15,14 @@ import json
 import csv
 import optparse
 import re
+import io
 import os
 import sys
 import urllib2
 import traceback
 
 from collections import OrderedDict
+from ConfigParser import RawConfigParser
 from datetime import datetime
 from time import time
 from pyquery import PyQuery as pq
@@ -42,7 +44,7 @@ GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
             'Reporter',
         ]))
 
-GOOGLE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
+GOOGLE_ISSUE_PAGE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
 
 # Format with google_project_name
 REF_RE_TMPL = r'''(?x)
@@ -66,25 +68,18 @@ REF_RE_TMPL = r'''(?x)
     (?(file)\#(?P<line>\d+))?
 '''
 
-# Mapping from Google Code issue labels to Github labels
-LABEL_MAPPING = {
-    'Type-Defect'      : 'bug',
-    'Type-Enhancement' : 'enhancement',
-    'Priority-Critical': 'prio:high',
-    'Priority-High'    : 'prio:high',
-    'Priority-Medium'  : None,
-    'Priority-Low'     : 'prio:low',
-}
+GITHUB_SOURCE_URL = 'https://github.com/{}/blob'
+GITHUB_ISSUES_URL = 'https://github.com/{}/issues'
 
-CLOSED_STATES = [
-    'Fixed',
-    'Verified',
-    'Invalid',
-    'Duplicate',
-    'WontFix',
-    'Done'
-]
+GITHUB_SOURCE_PAGE_URL = GITHUB_SOURCE_URL + '/{}/{}'  # ref/path
+GITHUB_ISSUES_PAGE_URL = GITHUB_ISSUES_URL + '/{}'     # number
 
+milestones    = OrderedDict()
+label_map     = {}
+closed_labels = set()
+author_map    = {}
+commit_map    = {}
+messages      = OrderedDict()
 
 class Namespace(object):
     """
@@ -118,6 +113,10 @@ class ExtraNamespace(Namespace):
         self.__dict__.update(kwargs)
         self.extra = Namespace()
 
+
+def read_json(filename):
+    with open(filename, "r") as fp:
+        return json.load(fp)
 
 def write_json(obj, filename):
     def namespace_to_dict(obj):
@@ -216,7 +215,7 @@ def format_md_updates(u):
         emit("Assigned to {s_owner}")
         s_owner = format_md_user(u, 'owner')
 
-    if u.status in CLOSED_STATES:
+    if u.status in closed_labels:
         if u.close_commit:
             emit("Closed in **{u.close_commit}**")
         else:
@@ -299,8 +298,8 @@ def format_textile(m, comment_nr=0):
     is_issue = (comment_nr == 0)
 
     i_tmpl = '"#{0}"'
-    if options.issues_link:
-        i_tmpl += ':' + options.issues_link + '/{0}'
+    if options.absolute_links:
+        i_tmpl += ':' + GITHUB_ISSUES_URL.format(options.github_repo) + '/{0}'
 
     body = "bc.. " + m.body + "\n"
 
@@ -410,7 +409,7 @@ def map_author(gc_uid, kind=None):
     email_re = re.compile(email_pat, re.I)
 
     matches = []
-    for email, gh_user in authors.items():
+    for email, gh_user in author_map.items():
         if email_re.match(email):
             matches.append((email, gh_user))
     if len(matches) > 1:
@@ -456,9 +455,8 @@ def fixup_refs(s, add_ref=None):
                     del pathfrags[:1]
                 filename = '/'.join(pathfrags)
 
-                ref = ('https://github.com/{}/blob/{}/{}'
-                       .format(options.github_project_name,
-                               ref or branch, filename))
+                ref = (GITHUB_SOURCE_PAGE_URL
+                       .format(options.github_repo, ref or branch, filename))
 
         if not ref:
             return match.group()
@@ -510,7 +508,7 @@ def add_label_or_milestone(label, labels_to_add):
     if milestone:
         return milestone
 
-    label = LABEL_MAPPING.get(label, label)
+    label = label_map.get(label, label)
     if label and label not in labels_to_add:
         labels_to_add.append(label)
 
@@ -582,7 +580,7 @@ def get_gcode_updates(updates_pq):
 def get_gcode_comment(issue, comment_pq):
     comment = ExtraNamespace(
         created_at = parse_gcode_date(comment_pq('.date').attr('title')),
-        updated_at = options.updated_at)
+        updated_at = options.export_date)
 
     comment.extra(
         link       = issue.extra.link + '#' + comment_pq('a').attr('name'),
@@ -611,7 +609,7 @@ def get_gcode_issue(issue_summary):
         state      = 'closed' if issue_summary['Closed'] else 'open',
         closed_at  = timestamp_to_date(issue_summary['ClosedTimestamp']) if issue_summary['Closed'] else None,
         created_at = timestamp_to_date(issue_summary['OpenedTimestamp']),
-        updated_at = options.updated_at)
+        updated_at = options.export_date)
 
     if not issue.title:
         issue.title = "FIXME: empty title"
@@ -626,7 +624,7 @@ def get_gcode_issue(issue_summary):
     else:
         issue.assignee = None
 
-    issue.extra.link = GOOGLE_URL.format(google_project_name, issue_summary['ID'])
+    issue.extra.link = GOOGLE_ISSUE_PAGE_URL.format(google_project_name, issue_summary['ID'])
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
@@ -714,11 +712,11 @@ def get_or_create_milestone(label, warn_duplicate=False):
     global milestones
 
     kind, _, value = label.partition('-')
-    if kind != 'Milestone':
+    if kind != options.milestone_label_prefix:
         return
 
     if not value:
-        print("FIXME: Unable to parse milestone name: '{}'".format(label))
+        output("FIXME: Unable to parse milestone name: '{}'".format(label))
         return
 
     try:
@@ -729,18 +727,18 @@ def get_or_create_milestone(label, warn_duplicate=False):
            title  = value)
     else:
         if warn_duplicate:
-            print("Warning: Duplicate milestone: '{}'".format(value))
+            output("Warning: Duplicate milestone: '{}'".format(value))
 
     return milestone
 
 
 def extract_milestone_labels(label_map):
     for label, description in label_map.items():
-        milestone = get_or_create_milestone(label)
+        milestone = get_or_create_milestone(label, warn_duplicate=True)
         if not milestone:
             if len(description.split()) > 1:
-                print("Warning: Non-singleword GitHub issue label: '{}'"
-                      .format(description))
+                output("Warning: Non-singleword GitHub issue label: '{}'"
+                       .format(description))
             continue
 
         del label_map[label]
@@ -760,105 +758,230 @@ def extract_milestone_labels(label_map):
             milestone.description = description
 
 
-if __name__ == "__main__":
-    usage = "usage: %prog [options] <google project name>"
-    parser = optparse.OptionParser(usage = usage,
-                description = "Export all issues from a Google Code project for a Github project.")
+def config_section(config, section_name):
+    section = OrderedDict()
+    for option in config.options(section_name):
+        section[option] = config.get(section_name, option)
+    return section
 
-    parser.add_option('--omit-priority', action='store_true', default=False,
-            help="Don't migrate priority labels")
-    parser.add_option('--skip-closed', action='store_true', default=False,
-            help='Skip all closed bugs')
-    parser.add_option('--start-at', type=int, default=None,
+def read_ini(filename):
+    config = RawConfigParser()
+    config.optionxform = str
+
+    config.read(filename)
+
+    sections = OrderedDict()
+
+    for section_name in config.sections():
+        sections[section_name] = config_section(config, section_name)
+
+    return sections
+
+def read_messages(filename):
+    messages = OrderedDict()
+
+    msg_id = None
+    with codecs.open(filename, "r", encoding='utf-8') as f:
+        for line in f:
+            frags = line.split(None, 4)
+            if len(frags) == 4:
+                start, mb_msg_id, checksum, end = frags
+                if (start == '<!--' and end == '-->' and
+                    checksum == hashlib.md5(mb_msg_id).hexdigest()):
+                    msg_id = mb_msg_id
+                    continue
+
+            messages[msg_id] = messages.get(msg_id, '') + line
+        else:
+            messages.setdefault(msg_id, '')
+    messages.pop(None, None)
+
+    output("Read {} overrides from {}\n".format(len(messages), filename))
+
+    return messages
+
+def write_messages(messages, filename):
+    try:
+        os.rename(filename, filename + "-old")
+    except OSError:
+        pass
+
+    with codecs.open(filename, "w", encoding='utf-8') as f:
+        for msg_id, body in messages.items():
+            f.write('<!--  {}   {}  -->\n'
+                    .format(msg_id, hashlib.md5(msg_id).hexdigest()))
+            f.write(body.strip())
+            f.write('\n\n')
+
+
+# Reasonable defaults for config options.
+CONFIG_DEFAULT_INI = """
+[google]
+project
+start-at
+end-at
+skip-closed = false
+
+[github]
+repo
+fallback-user
+absolute-links = false
+issues-start-from     = 1
+milestones-start-from = 1
+export-date = {now}
+
+[include]
+authors-json
+labels-ini
+commits-maps =
+messages-input
+messages-output
+
+[misc]
+imported-label = imported
+milestone-label-prefix = Milestone
+milestone-label-date-format = %Y-%m-%d
+
+""".format(now=datetime.now().isoformat() + "Z")
+
+
+def main():
+    global options, google_project_name
+    global milestones
+    global author_map
+    global closed_labels
+    global label_map
+    global commit_map
+    global messages
+
+    config = RawConfigParser(allow_no_value=True)
+    config.optionxform = str
+
+    config.readfp(io.BytesIO(CONFIG_DEFAULT_INI))
+    config.read('config.ini')
+
+    parser = optparse.OptionParser(
+            usage="usage: %prog [options] [<google-project>]",
+            description="Export all issues from a Google Code project for a GitHub repo.")
+
+    google = optparse.OptionGroup(parser, title="Google Code options")
+
+    google.add_option('--start-at', type=int,
+            default=config.get('google', 'start-at'),
             help='Start at the given Google Code issue number')
-    parser.add_option('--end-at', type=int, default=None,
+    google.add_option('--end-at', type=int,
+            default=config.get('google', 'end-at'),
             help='End at the given Google Code issue number')
-    parser.add_option('--issues-start-from', type=int, default=1,
+    google.add_option('--skip-closed', action='store_true',
+            default=config.getboolean('google', 'skip-closed'),
+            help='Skip all closed bugs')
+
+    parser.add_option_group(google)
+
+
+    github = optparse.OptionGroup(parser, title="GitHub options")
+
+    github.add_option('--github-repo',
+            default=config.get('github', 'repo'),
+            help='Used to construct URLs if --absolute-links is given')
+    github.add_option('--fallback-user',
+            default=config.get('github', 'fallback-user'),
+            help='Default username (e.g. bot account) to use for unknown users')
+    github.add_option('--absolute-links', action='store_true',
+            default=config.getboolean('github', 'absolute-links'),
+            help='Absolute URLs in links to issues and source files')
+
+    github.add_option('--issues-start-from', type=int,
+            default=config.get('github', 'issues-start-from'),
             help='First issue number')
-    parser.add_option('--milestones-start-from', type=int, default=1,
+    github.add_option('--milestones-start-from', type=int,
+            default=config.get('github', 'milestones-start-from'),
             help='First milestone number')
-    parser.add_option('--milestone-date-format', type=str, default='%Y-%m-%d',
-            help='Format of [date] for milestones from labels.txt')
-    parser.add_option('--issues-link', type=str, default=None,
-            help='Full link to issues page in the new repo')
-    parser.add_option('--export-date', dest='updated_at', type=str, default=None,
+
+    github.add_option('--export-date',
+            default=config.get('github', 'export-date'),
             help='Date of export')
-    parser.add_option('--imported-label', type=str, default='imported',
-            help='A label to mark all imported issues')
-    parser.add_option('--fallback-user', type=str, default=None,
-            help='Default username for unknown users')
-    parser.add_option('--commit-map', action='append', default=[],
+
+    parser.add_option_group(github)
+
+
+    include = optparse.OptionGroup(parser, title="Included files")
+
+    include.add_option('--authors-json',
+            default=config.get('include', 'authors-json'),
+            help='Mapping of Google Code emails to GitHub usernames')
+    include.add_option('--labels-ini',
+            default=config.get('include', 'labels-ini'),
+            help='Mapping of Google Code labels to GitHub counterparts')
+    include.add_option('--commits-map', action='append',
+            default=[f.strip() for f in config.get('include', 'commits-maps').split(',')
+                     if f.strip()],
             help='Map file(s) for revision references')
-    parser.add_option('--dump-messages', action='store_true', dest='dump', default=False,
-            help='Dump text into a file used afterwards to override messages')
-    parser.add_option('--github-project-name', type=str,
-            help='Used to create links to files referenced from issues')
+
+    include.add_option('--messages-output',
+            default=config.get('include', 'messages-output'),
+            help='Dump messages text into a given file used')
+    include.add_option('--messages-input',
+            default=config.get('include', 'messages-input'),
+            help='Override certain messages with a text taken from a given file')
+
+    parser.add_option_group(include)
+
+
+    misc = optparse.OptionGroup(parser, title="Misc options")
+
+    misc.add_option('--imported-label',
+            default=config.get('misc', 'imported-label'),
+            help='A label to mark all imported issues')
+
+    misc.add_option('--milestone-label-prefix',
+            default=config.get('misc', 'milestone-label-prefix'),
+            help='Label prefix to recognize milestones')
+    misc.add_option('--milestone-label-date-format',
+            default=config.get('misc', 'milestone-label-date-format'),
+            help='Format of [date] for milestones taken from the labels config')
+
+    parser.add_option_group(misc)
+
+
     parser.add_option('-v', '--verbose', action='count', default=0,
             help='Verbosity level (-v to -vvv)')
 
 
     options, args = parser.parse_args()
 
-    if len(args) != 1:
+    if len(args) > 1:
         parser.print_help()
-        sys.exit()
+        sys.exit(1)
 
-    google_project_name = args[0]
+    if args:
+        google_project_name = args[0]
+    elif config.get('google', 'project'):
+        google_project_name = config.get('google', 'project')
+    else:
+        output("Error: No Google Code project name given\n")
+        parser.print_help()
+        sys.exit(1)
 
-    if not options.github_project_name:
-        options.github_project_name = '{0}/{0}'.format(google_project_name)
-        output("WARNING: GitHub project name is set to '{}'\n"
-               .format(options.github_project_name))
+    if not options.github_repo:
+        options.github_repo = '{0}/{0}'.format(google_project_name)
+        if options.absolute_links:  # otherwise unused
+            output("Warning: GitHub repo name is set to '{}'"
+                   .format(options.github_repo))
 
-    try:
-        with open("authors.json", "r") as f:
-            authors = json.load(f)
-    except IOError:
-        authors = {}
+    if options.authors_json:
+        author_map.update(read_json(options.authors_json))
 
-    authors_orig = authors.copy()
+    if options.labels_ini:
+        labels_config = read_ini(options.labels_ini)
 
-    milestones = {}
+        for section in 'open', 'closed', 'labels':
+            label_map.update(labels_config.get(section, {}))
+        closed_labels.update(labels_config.get('closed', {}))
 
-    try:
-        # The labels.txt file has the same format as a list of predefined
-        # issues accessible for Google Code project admins
-        # at http://code.google.com/p/PROJ/adminIssues
-        #
-        # Each Google Code label except for Milestone-xxx should map to
-        # a corresponding GitHub label. Empty values are used to completely
-        # discard a label.
-        #
-        #   Type-Defect          = bug
-        #   Type-Enhancement     = enhancement
-        #   Priority-Critical    = prio:high
-        #   Priority-High        = prio:high
-        #   Priority-Medium      =
-        #   Priority-Low         = prio:low
-        #
-        # Milestones are treated in a different way.
-        # The name of a milestone is extracted from the LHS,
-        # and the milestone description is taken form the RHS among with
-        # an optional date enclosed in square brackets. The format of the date
-        # is specified through --milestone-date-format command line argument.
-        #
-        #   Milestone-v0.1.3     = [2010-05-01] Basic kernel APIs are implemented
-        #
-        with open("labels.txt", "r") as f:
-            for line in f:
-                if not line.strip():
-                    continue
-                label, description = (s.strip() for s in line.split('=', 1))
-                LABEL_MAPPING[label] = description
-            extract_milestone_labels(LABEL_MAPPING)
+        extract_milestone_labels(label_map)
 
-    except ValueError:
-        traceback.print_exc()
-    except IOError:
-        pass
-
-    commit_map = {}
-    for map_filename in reversed(options.commit_map):
+    for map_filename in reversed(options.commits_map):
         tmp_map = commit_map
         commit_map = {}
         with open(map_filename, 'r') as f:
@@ -869,67 +992,24 @@ if __name__ == "__main__":
 
                 commit_map[key] = tmp_map[value] if tmp_map else value
 
-
-    if not options.updated_at:
-        options.updated_at = datetime.fromtimestamp(int(time())).isoformat() + "Z"
-
     if not os.path.exists('issues'):
         os.mkdir('issues')
 
     if not os.path.exists('milestones'):
         os.mkdir('milestones')
 
-    messages = OrderedDict()
-    try:
-        msg_id = None
-        with codecs.open("messages.txt", "r", encoding='utf-8') as f:
-            for line in f:
-                frags = line.split(None, 4)
-                if len(frags) == 4:
-                    start, mb_msg_id, checksum, end = frags
-                    if (start == '<!--' and end == '-->' and
-                        checksum == hashlib.md5(mb_msg_id).hexdigest()):
-                        msg_id = mb_msg_id
-                        continue
-
-                messages[msg_id] = messages.get(msg_id, '') + line
-            else:
-                messages.setdefault(msg_id, '')
-        messages.pop(None, None)
-    except IOError:
-        messages = {}
-    else:
-        output("Read {} overrides from messages.txt\n".format(len(messages)))
+    if options.messages_input:
+        messages = read_messages(options.messages_input)
 
     try:
         process_gcode_issues()
     except Exception:
-        output('\n')
+        output()
         parser.print_help()
         raise
 
-    if options.dump:
-        try:
-            os.rename("messages.txt", "messages.txt-old")
-        except OSError:
-            pass
-        try:
-            with codecs.open("messages.txt", "w", encoding='utf-8') as f:
-                for msg_id, body in messages.items():
-                    f.write('<!--  {}   {}  -->\n'
-                            .format(msg_id, hashlib.md5(msg_id).hexdigest()))
-                    f.write(body.strip())
-                    f.write('\n\n')
-        except IOError:
-            pass
+    if options.messages_output:
+        write_messages(messages, options.messages_output)
 
-
-    for k, v in authors.items():
-        if k not in authors_orig.keys():
-            output('FIXME: NEW AUTHOR %s: %s\n' % (k, v))
-
-    if authors != authors_orig:
-        with open("authors.json-new", "w") as f:
-            f.write(json.dumps(authors, indent=4,
-                               separators=(',', ': '), sort_keys=True))
-            f.write('\n')
+if __name__ == "__main__":
+    main()
