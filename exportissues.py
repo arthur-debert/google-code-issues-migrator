@@ -505,30 +505,17 @@ def init_message(m, pquery):
     m.body = join_paragraphs(paragraphs)
 
 
-def add_label_get_milestone(label, labels, issue):
-    global milestones
-
-    if label.startswith('Priority-') and options.omit_priority:
-        return
-    if label.startswith('Milestone-'):
-        milestone_name = label[10:]
-        if not milestone_name:
-            return
-        try:
-            milestone = milestones[milestone_name]
-        except KeyError:
-            milestone = milestones[milestone_name] = Namespace(
-               number     = len(milestones) + options.milestones_start_from,
-               title      = milestone_name,
-               created_at = issue.created_at)
+def add_label_or_milestone(label, labels_to_add):
+    milestone = get_or_create_milestone(label)
+    if milestone:
         return milestone
 
     label = LABEL_MAPPING.get(label, label)
-    if label and label not in labels:
-        labels.append(label)
+    if label and label not in labels_to_add:
+        labels_to_add.append(label)
 
 
-def get_gcode_updates(issue, updates_pq):
+def get_gcode_updates(updates_pq):
     updates = Namespace(
         orig_owner    = None,
         owner         = None,
@@ -565,7 +552,7 @@ def get_gcode_updates(issue, updates_pq):
                         lst.append(ref)
 
                 elif key == 'Labels':
-                    milestone = add_label_get_milestone(word, lst, issue)
+                    milestone = add_label_or_milestone(word, lst)
                     if milestone:
                         if is_removed:
                             updates.old_milestone = milestone.title
@@ -599,7 +586,7 @@ def get_gcode_comment(issue, comment_pq):
 
     comment.extra(
         link       = issue.extra.link + '#' + comment_pq('a').attr('name'),
-        updates    = get_gcode_updates(issue, comment_pq('.updates .box-inner')))
+        updates    = get_gcode_updates(comment_pq('.updates .box-inner')))
 
     init_message(comment, comment_pq('pre'))
 
@@ -648,8 +635,10 @@ def get_gcode_issue(issue_summary):
         issue.labels.append(options.imported_label)
 
     for label in issue_summary['AllLabels'].split(', ') + [issue_summary['Status']]:
-        milestone = add_label_get_milestone(label, labels, issue)
+        milestone = add_label_or_milestone(label, issue.labels)
         if milestone:
+            if not hasattr(milestone, 'created_at'):
+                milestone.created_at = issue.created_at
             if issue.state == 'open':
                 milestone.state = 'open'
             issue.milestone = milestone.number
@@ -719,6 +708,56 @@ def process_gcode_issues():
             output('Adding milestone %d' % m.number, level=1)
             write_json(m, 'milestones/{}.json'.format(m.number))
             output('\n', level=1)
+
+
+def get_or_create_milestone(label, warn_duplicate=False):
+    global milestones
+
+    kind, _, value = label.partition('-')
+    if kind != 'Milestone':
+        return
+
+    if not value:
+        print("FIXME: Unable to parse milestone name: '{}'".format(label))
+        return
+
+    try:
+        milestone = milestones[value]
+    except KeyError:
+        milestone = milestones[value] = Namespace(
+           number = len(milestones) + options.milestones_start_from,
+           title  = value)
+    else:
+        if warn_duplicate:
+            print("Warning: Duplicate milestone: '{}'".format(value))
+
+    return milestone
+
+
+def extract_milestone_labels(label_map):
+    for label, description in label_map.items():
+        milestone = get_or_create_milestone(label)
+        if not milestone:
+            if len(description.split()) > 1:
+                print("Warning: Non-singleword GitHub issue label: '{}'"
+                      .format(description))
+            continue
+
+        del label_map[label]
+
+        milestone.state  = 'closed',  # unless there will be any open issues encountered
+
+        date_match = re.match(r'^\[([^\]]+)\]\s*', description)
+        if date_match:
+            date_text = date_match.group(1)
+            parsed_date = datetime.strptime(date_text, options.milestone_label_date_format)
+
+            milestone.due_on = parsed_date.isoformat() + "Z"
+
+            description = description[date_match.end():]
+
+        if description:
+            milestone.description = description
 
 
 if __name__ == "__main__":
@@ -810,34 +849,8 @@ if __name__ == "__main__":
                 if not line.strip():
                     continue
                 label, description = (s.strip() for s in line.split('=', 1))
-                kind, _, value = label.partition('-')
-
-                if kind == 'Milestone':
-                    if not value:
-                        raise ValueError("Unable to parse milestone name: '{}'".format(label))
-
-                    milestone = milestones[value] = Namespace(
-                       number = len(milestones) + options.milestones_start_from,
-                       state  = 'closed',  # unless there will be any open issues encountered
-                       title  = value)
-
-                    date_match = re.match(r'^\[([^\]]+)\]\s*', description)
-                    if date_match:
-                        description = description[date_match.end():]
-                        if description:
-                            milestone.description = description
-
-                        date_text = date_match.group(1)
-                        parsed_date = datetime.strptime(date_text, options.milestone_date_format)
-
-                        milestone.due_on = parsed_date.isoformat() + "Z"
-
-                    continue
-
-                if len(description.split()) > 1:
-                    output("FIXME: non-singleword GitHub issue label: '{}'\n"
-                           .format(description))
                 LABEL_MAPPING[label] = description
+            extract_milestone_labels(LABEL_MAPPING)
 
     except ValueError:
         traceback.print_exc()
