@@ -10,6 +10,7 @@
 from __future__ import print_function
 
 import codecs
+import hashlib
 import json
 import csv
 import optparse
@@ -19,6 +20,7 @@ import sys
 import urllib2
 import traceback
 
+from collections import OrderedDict
 from datetime import datetime
 from time import time
 from pyquery import PyQuery as pq
@@ -879,17 +881,22 @@ if __name__ == "__main__":
     if not os.path.exists('milestones'):
         os.mkdir('milestones')
 
+    messages = OrderedDict()
     try:
-        messages = {}
         msg_id = None
         with codecs.open("messages.txt", "r", encoding='utf-8') as f:
             for line in f:
-                if line.startswith('====()===={{}}====[]==== {}'
-                                   .format(GOOGLE_ISSUES_URL
-                                           .format(google_project_name))):
-                    msg_id = line.split()[1]
-                else:
-                    messages[msg_id] = messages.get(msg_id, '') + line
+                frags = line.split(None, 4)
+                if len(frags) == 4:
+                    start, mb_msg_id, checksum, end = frags
+                    if (start == '<!--' and end == '-->' and
+                        checksum == hashlib.md5(mb_msg_id).hexdigest()):
+                        msg_id = mb_msg_id
+                        continue
+
+                messages[msg_id] = messages.get(msg_id, '') + line
+            else:
+                messages.setdefault(msg_id, '')
         messages.pop(None, None)
     except IOError:
         messages = {}
@@ -910,14 +917,9 @@ if __name__ == "__main__":
             pass
         try:
             with codecs.open("messages.txt", "w", encoding='utf-8') as f:
-                # for msg_id, body in sorted(messages.iteritems(),
-                #                      key=lambda kv: (-len(kv[1].splitlines()), kv[0])):
-                for msg_id, body in sorted(messages.iteritems()):
-                    if not msg_id:
-                        continue
-                    if not body.strip():
-                        continue
-                    f.write('====()===={{}}====[]==== {}\n'.format(msg_id))
+                for msg_id, body in messages.items():
+                    f.write('<!--  {}   {}  -->\n'
+                            .format(msg_id, hashlib.md5(msg_id).hexdigest()))
                     f.write(body.strip())
                     f.write('\n\n')
         except IOError:
