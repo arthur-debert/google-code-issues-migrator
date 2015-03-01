@@ -721,7 +721,7 @@ def get_gcode_issue(summary):
     # Populate properties available from the summary CSV
     issue = ExtraNamespace(
         number     = int(summary['ID']) + (options.issues_start_from - 1),
-        title      = summary['Summary'].replace('%', '&#37;').strip(),
+        title      = summary['Summary'].strip(),
         state      = 'closed' if summary['Closed'] else 'open',
         closed_at  = timestamp_to_date(summary['ClosedTimestamp']) if summary['Closed'] else None,
         created_at = timestamp_to_date(summary['OpenedTimestamp']),
