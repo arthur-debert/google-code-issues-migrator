@@ -616,12 +616,15 @@ def init_message(m, pquery):
 
 
 def get_milestone_or_add_label(label, labels_to_add):
+    label = label_map.get(label, label)
+    if not label:
+        return
+
     milestone = get_milestone(label)
     if milestone:
         return milestone
 
-    label = label_map.get(label, label)
-    if label and label not in labels_to_add:
+    if label not in labels_to_add:
         labels_to_add.append(label)
 
 
@@ -830,39 +833,34 @@ def get_milestone(label, initializing=False):
     global milestones
 
     kind, _, value = label.partition('-')
-    if kind != options.milestone_label_prefix:
-        return
-
-    if not value:
-        output("FIXME: Unable to parse milestone name: '{}'".format(label))
+    if kind != options.milestone_label_prefix or not value:
+        if (initializing or
+            kind == options.milestone_label_prefix and not value):
+            output("FIXME: Unable to parse milestone name: '{}'".format(label))
         return
 
     try:
         milestone = milestones[value]
     except KeyError:
         if not initializing and not options.create_missing_milestones:
-            output("Warning: Discarding milestone '{}'".format(value))
+            output("Warning: Discarding milestone '{}'".format(value), level=1)
             return
         milestone = milestones[value] = Namespace(
            number = len(milestones) + options.milestones_start_from,
            title  = value)
     else:
         if initializing:
-            output("Warning: Duplicate milestone: '{}'".format(value))
+            output("FIXME: Duplicate milestone: '{}'".format(value))
+            return
 
     return milestone
 
 
-def extract_milestone_labels(label_map):
-    for label, description in label_map.items():
+def init_milestones(milestone_label_map):
+    for label, description in milestone_label_map.items():
         milestone = get_milestone(label, initializing=True)
         if not milestone:
-            if len(description.split()) > 1:
-                output("Warning: Non-singleword GitHub issue label: '{}'"
-                       .format(description))
             continue
-
-        del label_map[label]
 
         milestone.state  = 'closed',  # unless there will be any open issues encountered
 
@@ -1111,7 +1109,12 @@ def main():
             label_map.update(labels_config.get(section, {}))
         closed_labels.update(labels_config.get('closed', {}))
 
-        extract_milestone_labels(label_map)
+        for label, gh_label in label_map.items():
+            if len(gh_label.split()) > 1:
+                output("Warning: '{}' issue label maps to a non-singleword '{}'"
+                       .format(label, gh_label))
+
+        init_milestones(labels_config.get('milestones', {}))
 
     for map_filename in reversed(options.commits_map):
         tmp_map = commit_map
