@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+
 import codecs
 import contextlib
 import csv
@@ -18,6 +19,7 @@ from collections import OrderedDict
 from ConfigParser import RawConfigParser
 from datetime import datetime
 from pyquery import PyQuery as pq
+
 
 # The maximum number of records to retrieve from Google Code in a single request
 GOOGLE_MAX_RESULTS = 1000
@@ -39,27 +41,6 @@ GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
 
 GOOGLE_ISSUE_PAGE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
 
-# Format with google_project_name
-REF_RE_TMPL = r'''(?x)
-    ( (?P<issue>
-        (?<![?\-])\b[Ii]s[su]{{2}}e (?=\d*\b) [ \t#-]*
-      | (https?://)?code\.google\.com/p/{0}/issues/detail\? )+
-
-    | (?P<commit>
-        \b([Rr]ev(ision)?|[Cc]ommit) (?=\d*\b) [ \t#-]*
-      | (\br(?=\d\d+\b))  # nobody cares about linking to the first ten commits :(
-      | (https?://)?code\.google\.com/p/{0}/source/detail\? )+
-
-    | (?P<link>
-        (https?://)?code\.google\.com/p/{0}/source/browse/
-        (?P<file> [\w\-\.~%!'"\@/]* ) \?? ) )
-
-    (?P<u>(?<=\?))?
-    ( (?(u)[&\w\-=%]*?\b(?(issue)id|r)=)
-      (?P<value> (?(issue)\d+|(\d+|\b[0-9a-f]{{7,40}})) )\b (?!=) )?
-    (?(u)[&\w\-=%]*)
-    (?(file)\#(?P<line>\d+))?
-'''
 
 GITHUB_SOURCE_URL = 'https://github.com/{0}/blob'
 GITHUB_ISSUES_URL = 'https://github.com/{0}/issues'
@@ -73,6 +54,9 @@ closed_labels = set()
 author_map    = {}
 commit_map    = {}
 messages      = OrderedDict()
+
+
+###############################################################################
 
 class Namespace(object):
     """
@@ -461,6 +445,28 @@ def map_author(gc_uid, kind=None, fallback=True):
     if fallback:
         return options.fallback_user
 
+
+# Format with google_project_name
+REF_RE_TMPL = r'''(?x)
+    ( (?P<issue>
+        (?<![?\-])\b[Ii]s[su]{{2}}e (?=\d*\b) [ \t#-]*
+      | (https?://)?code\.google\.com/p/{0}/issues/detail\? )+
+
+    | (?P<commit>
+        \b([Rr]ev(ision)?|[Cc]ommit) (?=\d*\b) [ \t#-]*
+      | (\br(?=\d\d+\b))  # nobody cares about linking to the first ten commits :(
+      | (https?://)?code\.google\.com/p/{0}/source/detail\? )+
+
+    | (?P<link>
+        (https?://)?code\.google\.com/p/{0}/source/browse/
+        (?P<file> [\w\-\.~%!'"\@/]* ) \?? ) )
+
+    (?P<u>(?<=\?))?
+    ( (?(u)[&\w\-=%]*?\b(?(issue)id|r)=)
+      (?P<value> (?(issue)\d+|(\d+|\b[0-9a-f]{{7,40}})) )\b (?!=) )?
+    (?(u)[&\w\-=%]*)
+    (?(file)\#(?P<line>\d+))?
+'''
 
 def fixup_refs(s, add_ref=None):
     def fix_ref(match):
