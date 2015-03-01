@@ -50,7 +50,8 @@ GITHUB_ISSUES_PAGE_URL = GITHUB_ISSUES_URL + '/{1}'      # number
 
 milestones    = OrderedDict()
 label_map     = {}
-closed_labels = set()
+open_labels   = {}
+closed_labels = {}
 author_map    = {}
 commit_map    = {}
 messages      = OrderedDict()
@@ -213,7 +214,7 @@ def format_md_updates(u):
             emit("Closed in **{u.close_commit}**")
         else:
             emit("Closed with status **{u.status}**")
-    elif u.status:
+    elif u.status in open_labels:
         emit("Reopened, status set to **{u.status}**")
 
     if u.mergedinto:
@@ -984,6 +985,7 @@ def main():
     global options, google_project_name
     global milestones
     global author_map
+    global open_labels
     global closed_labels
     global label_map
     global commit_map
@@ -1119,9 +1121,10 @@ def main():
     if options.labels_ini:
         labels_config = read_ini(options.labels_ini)
 
-        for section in 'open', 'closed', 'labels':
-            label_map.update(labels_config.get(section, {}))
+        open_labels.update(labels_config.get('open', {}))
         closed_labels.update(labels_config.get('closed', {}))
+        for labels in open_labels, closed_labels, labels_config.get('labels', {}):
+            label_map.update(labels)
 
         for label, gh_label in label_map.items():
             if len(gh_label.split()) > 1:
