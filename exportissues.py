@@ -129,10 +129,11 @@ def write_json(obj, filename):
                   default=namespace_to_dict)
         fp.write('\n')
 
-def output(string, level=0):
+def output(string='', level=0, fp=sys.stdout):
     if options.verbose >= level:
-        sys.stdout.write(string)
-        sys.stdout.flush()
+        fp.write(string)
+        fp.write('\n')
+        fp.flush()
 
 
 def parse_gcode_date(date_text):
@@ -351,7 +352,7 @@ def format_message(m, comment_nr=0):
 
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
-    output('Exporting issue %d' % issue.number, level=1)
+    output('Exporting issue {}'.format(issue.number), level=1)
 
     format_message(issue)
     write_json(issue, "issues/{}.json".format(issue.number))
@@ -417,11 +418,11 @@ def map_author(gc_uid, kind=None):
         for email, gh_user in matches:
             output('\t{email}'.format(**locals()))
     elif matches:
-        output("{:<10}    {:>22} -> {:>32}:   {:<16}\n"
+        output("{:<10}    {:>22} -> {:>32}:   {:<16}"
                .format(kind, gc_uid, *matches[0]), level=3)
         return matches[0][1]
 
-    output("{:<10}!!! {:>22}\n".format(kind, gc_uid), level=2)
+    output("{:<10}!!! {:>22}".format(kind, gc_uid), level=2)
 
     return options.fallback_user
 
@@ -439,7 +440,7 @@ def fixup_refs(s, add_ref=None):
                 try:
                     ref = commit_map[value]
                 except KeyError:
-                    output('FIXME: rev {} not found in commit map\n'.format(value))
+                    output('FIXME: rev {} not found in commit map'.format(value))
 
             filename = match.group('file')
             if filename:
@@ -464,7 +465,7 @@ def fixup_refs(s, add_ref=None):
         if add_ref is not None:
             add_ref(ref)
 
-        output('>>> {:>50}  {}\n'.format(ref, match.group()), level=3)
+        output('>>> {:>50}  {}'.format(ref, match.group()), level=3)
         return ref
 
     return re.sub(REF_RE_TMPL.format(google_project_name), fix_ref, s)
@@ -590,7 +591,7 @@ def get_gcode_comment(issue, comment_pq):
 
     paragraphs = comment.extra.paragraphs
     if len(paragraphs) > 1 or paragraphs and paragraphs[0][0]:
-        output("FIXME: unexpected paragraph structure in {}\n"
+        output("FIXME: unexpected paragraph structure in {}"
                .format(comment.link))
 
     comment.extra.orig_user  = comment_pq('.userlink').text()
@@ -600,7 +601,7 @@ def get_gcode_comment(issue, comment_pq):
 
 
 def get_gcode_issue(issue_summary):
-    output('Importing issue %d\n' % int(issue_summary['ID']), level=1)
+    output('Importing issue {}'.format(int(issue_summary['ID'])), level=1)
 
     # Populate properties available from the summary CSV
     issue = ExtraNamespace(
@@ -673,7 +674,7 @@ def get_gcode_issues():
         else:
             break
 
-    output('Fetched summaries for {} issues\n'.format(len(issues)))
+    output('Fetched summaries for {} issues'.format(len(issues)))
     return issues
 
 
@@ -686,11 +687,11 @@ def process_gcode_issues():
     if options.start_at is not None:
         issues = [x for x in issues if int(x['ID']) >= options.start_at]
         previous_gid = options.start_at - 1
-        output('Starting at issue %d\n' % options.start_at, level=1)
+        output('Starting at issue {}'.format(options.start_at), level=1)
 
     if options.end_at is not None:
         issues = [x for x in issues if int(x['ID']) <= options.end_at]
-        output('End at issue %d\n' % options.end_at, level=1)
+        output('End at issue {}'.format(options.end_at), level=1)
 
     for issue_summary in issues:
         issue = get_gcode_issue(issue_summary)
@@ -699,13 +700,11 @@ def process_gcode_issues():
             continue
 
         add_issue_to_github(issue)
-        output('\n', level=1)
 
     if milestones:
         for m in milestones.values():
-            output('Adding milestone %d' % m.number, level=1)
+            output('Adding milestone {}'.format(m.number), level=1)
             write_json(m, 'milestones/{}.json'.format(m.number))
-            output('\n', level=1)
 
 
 def get_or_create_milestone(label, warn_duplicate=False):
@@ -796,7 +795,7 @@ def read_messages(filename):
             messages.setdefault(msg_id, '')
     messages.pop(None, None)
 
-    output("Read {} overrides from {}\n".format(len(messages), filename))
+    output("Read {} overrides from {}".format(len(messages), filename))
 
     return messages
 
@@ -959,7 +958,7 @@ def main():
     elif config.get('google', 'project'):
         google_project_name = config.get('google', 'project')
     else:
-        output("Error: No Google Code project name given\n")
+        output("Error: No Google Code project name given")
         parser.print_help()
         sys.exit(1)
 
