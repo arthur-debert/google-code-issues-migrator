@@ -3,22 +3,20 @@
 from __future__ import print_function
 
 import codecs
-import hashlib
-import json
+import contextlib
 import csv
-import optparse
-import re
+import hashlib
 import io
+import json
+import optparse
 import os
+import re
 import sys
 import urllib2
-import traceback
 
 from collections import OrderedDict
-from contextlib import closing
 from ConfigParser import RawConfigParser
 from datetime import datetime
-from time import time
 from pyquery import PyQuery as pq
 
 # The maximum number of records to retrieve from Google Code in a single request
@@ -533,7 +531,7 @@ def init_attachments(m, pquery):
         output("Downloading attachment '{}' "
                .format(attachment_name), level=2)
         try:
-            with closing(urllib2.urlopen(attachment_url)) as sf:
+            with contextlib.closing(urllib2.urlopen(attachment_url)) as sf:
                 content = sf.read()
         except urllib2.URLError:
             output("FIXME: Unable to get an attachment file '{}' from '{}'"
@@ -563,7 +561,7 @@ def init_attachments(m, pquery):
                                   {'Content-Type': 'application/json'})
 
         try:
-            with closing(urllib2.urlopen(request)) as sf:
+            with contextlib.closing(urllib2.urlopen(request)) as sf:
                 response = json.load(sf, object_pairs_hook=OrderedDict)
         except urllib2.URLError:
             output("FIXME: Unable to post attachments to Gist"
