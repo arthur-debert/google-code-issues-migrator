@@ -1,11 +1,4 @@
 #!/usr/bin/env python2
-# -*- coding: utf-8 -*-
-
-#
-# TODO:
-# * code cleanup
-# * add attachments for issue body?
-#
 
 from __future__ import print_function
 
@@ -22,6 +15,7 @@ import urllib2
 import traceback
 
 from collections import OrderedDict
+from contextlib import closing
 from ConfigParser import RawConfigParser
 from datetime import datetime
 from time import time
@@ -68,11 +62,11 @@ REF_RE_TMPL = r'''(?x)
     (?(file)\#(?P<line>\d+))?
 '''
 
-GITHUB_SOURCE_URL = 'https://github.com/{}/blob'
-GITHUB_ISSUES_URL = 'https://github.com/{}/issues'
+GITHUB_SOURCE_URL = 'https://github.com/{0}/blob'
+GITHUB_ISSUES_URL = 'https://github.com/{0}/issues'
 
-GITHUB_SOURCE_PAGE_URL = GITHUB_SOURCE_URL + '/{}/{}'  # ref/path
-GITHUB_ISSUES_PAGE_URL = GITHUB_ISSUES_URL + '/{}'     # number
+GITHUB_SOURCE_PAGE_URL = GITHUB_SOURCE_URL + '/{1}/{2}'  # ref/path
+GITHUB_ISSUES_PAGE_URL = GITHUB_ISSUES_URL + '/{1}'      # number
 
 milestones    = OrderedDict()
 label_map     = {}
@@ -166,13 +160,15 @@ def filter_unicode(s):
 
 ###############################################################################
 
-def format_list(lst, fmt='{}', last_sep=', '):
+def format_list(lst, fmt='{}', sep=', ', last_sep=None):
     lst = map(fmt.format, lst)
-    but_tail = ', '.join(lst[:-1])
+    if last_sep is None or sep == last_sep:
+        return sep.join(lst)
+
+    but_tail = sep.join(lst[:-1])
     last_pair = lst[-1:]
     if but_tail:
         last_pair.insert(0, but_tail)
-    return last_sep.join(last_pair)
 
 
 def format_md_user(ns, kind='user'):
@@ -239,19 +235,29 @@ def format_md_updates(u):
     elif u.new_milestone:
         emit("Added to the **{u.new_milestone}** milestone")
 
-    s_old_blocking = format_list(u.old_blocking, '**#{}**', ' or ')
-    s_new_blocking = format_list(u.new_blocking, '**#{}**', ' and ')
+    s_old_blocking = format_list(u.old_blocking, '**#{}**')
+    s_new_blocking = format_list(u.new_blocking, '**#{}**')
     if s_old_blocking:
         emit("No more blocking {s_old_blocking}")
     if s_new_blocking:
         emit("Blocking {s_new_blocking}")
 
-    s_old_blockedon = format_list(u.old_blockedon, '**#{}**', ' or ')
-    s_new_blockedon = format_list(u.new_blockedon, '**#{}**', ' and ')
+    s_old_blockedon = format_list(u.old_blockedon, '**#{}**')
+    s_new_blockedon = format_list(u.new_blockedon, '**#{}**')
     if s_old_blockedon:
         emit("No more blocked on {s_old_blockedon}")
     if s_new_blockedon:
         emit("Blocked on {s_new_blockedon}")
+
+    s_new_labels = format_list(u.new_labels, '**`{}`**')
+    s_old_labels = format_list(u.old_labels, '**`{}`**')
+    s_labels_plural = 's' * (len(u.new_labels) + len(u.old_labels) > 1)
+    if s_new_labels and s_old_labels:
+        emit("Added {s_new_labels} and removed {s_old_labels} labels")
+    elif s_new_labels:
+        emit("Added {s_new_labels} label{s_labels_plural}")
+    elif s_old_labels:
+        emit("Removed {s_old_labels} label{s_labels_plural}")
 
     s_new_labels = format_list(u.new_labels, '**`{}`**')
     s_old_labels = format_list(u.old_labels, '**`{}`**')
@@ -287,6 +293,16 @@ def format_markdown(m, comment_nr=0):
                       .format(s_orig_owner=format_md_user(m, 'orig_owner')))
     else:
         footer = format_md_updates(m.extra.updates)
+
+    if m.extra.attachments:
+        a = m.extra.attachments
+        if footer:
+            footer += '\n>\n'
+        footer += ("Attached {s_files} ([view{s_plural} on Gist]({a.url}))"
+                   .format(s_files=format_list(a.files.items(),
+                                               '[**`{0[0]}`**]({0[1]})'),
+                           s_plural=' all' * (len(a.files) > 1), **locals()))
+
 
     def gen_msg_blocks():
         if header: yield header
@@ -471,10 +487,63 @@ def fixup_refs(s, add_ref=None):
     return re.sub(REF_RE_TMPL.format(google_project_name), fix_ref, s)
 
 
+def init_attachments(m, pquery):
+    m.extra.attachments = None
+
+    files = OrderedDict()
+    for attachment_pq in pquery('.attachments > table').items():
+        for link in attachment_pq('a').items():
+            if link.text() == 'Download':
+                break
+        else:
+            continue
+
+        attachment_name = attachment_pq('b').text()
+        attachment_url = link.attr('href')
+
+        output("Downloading attachment '{}' "
+               .format(attachment_name), level=2)
+        try:
+            with closing(urllib2.urlopen(attachment_url)) as sf:
+                content = sf.read()
+        except urllib2.URLError:
+            output("FIXME: Unable to get an attachment file '{}' from '{}'"
+                   .format(attachment_name, attachment_url))
+            continue
+
+        try:
+            files[attachment_name] = {'content': content.decode('utf-8')}
+        except UnicodeDecodeError:
+            output("Skipping binary file", level=2)
+
+    if files:
+        data = {'description': (('Issue attachments for {0}#{1}: ' +
+                                 GITHUB_ISSUES_PAGE_URL)
+                                .format(options.github_repo, m.extra.issue_number)),
+                'files': files, 'public': False}
+
+        request = urllib2.Request('https://api.github.com/gists', json.dumps(data),
+                                  {'Content-Type': 'application/json'})
+
+        try:
+            with closing(urllib2.urlopen(request)) as sf:
+                response = json.load(sf, object_pairs_hook=OrderedDict)
+        except urllib2.URLError:
+            output("FIXME: Unable to post attachments to Gist"
+                   .format(attachment_name, attachment_url))
+        else:
+            m.extra.attachments = Namespace(
+                url=response['html_url'],
+                files=OrderedDict((name, obj['raw_url'])
+                                  for name, obj in response['files'].items()))
+            output('Gist attachments URL: {}'.format(m.extra.attachments.url),
+                   level=1)
+
+
 def init_message(m, pquery):
     refs = set()
     paragraphs = [tuple(fixup_refs(text, add_ref=refs.add) for text in pair)
-                  for pair in split_into_paragraphs(pquery)]
+                  for pair in split_into_paragraphs(pquery('pre'))]
 
     # Strip the placeholder text, if any
     if len(paragraphs) == 1 and hasattr(m.extra, 'updates'):
@@ -502,6 +571,8 @@ def init_message(m, pquery):
     m.extra.refs = refs
     m.extra.paragraphs = paragraphs
     m.body = join_paragraphs(paragraphs)
+
+    init_attachments(m, pquery)
 
 
 def add_label_or_milestone(label, labels_to_add):
@@ -583,11 +654,11 @@ def get_gcode_comment(issue, comment_pq):
         created_at = parse_gcode_date(comment_pq('.date').attr('title')),
         updated_at = options.export_date)
 
-    comment.extra(
-        link       = issue.extra.link + '#' + comment_pq('a').attr('name'),
-        updates    = get_gcode_updates(comment_pq('.updates .box-inner')))
+    comment.extra.issue_number = issue.number
+    comment.extra.link = issue.extra.link + '#' + comment_pq('a').attr('name')
+    comment.extra.updates = get_gcode_updates(comment_pq('.updates .box-inner'))
 
-    init_message(comment, comment_pq('pre'))
+    init_message(comment, comment_pq)
 
     paragraphs = comment.extra.paragraphs
     if len(paragraphs) > 1 or paragraphs and paragraphs[0][0]:
@@ -616,6 +687,8 @@ def get_gcode_issue(issue_summary):
         issue.title = "FIXME: empty title"
         output(" FIXME: empty title")
 
+    issue.extra.issue_number = issue.number
+
     issue.extra.orig_user = issue_summary['Reporter']
     issue.user = map_author(issue.extra.orig_user, 'reporter')
 
@@ -643,12 +716,12 @@ def get_gcode_issue(issue_summary):
             issue.milestone = milestone.number
 
     # Scrape the issue details page for the issue body and comments
-    opener = urllib2.build_opener()
-    doc = pq(opener.open(issue.extra.link).read())
+    doc = pq(issue.extra.link)
+    doc.make_links_absolute()
 
     issue_pq = doc('.issuedescription .issuedescription')
 
-    init_message(issue, issue_pq('pre'))
+    init_message(issue, issue_pq)
 
     issue.extra.comments = []
     for comment_pq in map(pq, doc('.issuecomment')):
