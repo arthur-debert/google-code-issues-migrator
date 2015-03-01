@@ -451,11 +451,12 @@ def map_author(gc_uid, kind=None, fallback=True):
         for email, gh_user in matches:
             output('\t{email}'.format(**locals()))
     elif matches:
-        output("{:<10}    {:>22} -> {:>32}:   {:<16}"
-               .format(kind, gc_uid, *matches[0][::-1]), level=3)
+        output("Mapping {:<10} {:>22} -> {:>30}  :  {}"
+               .format('[{}]'.format(kind), gc_uid, *matches[0][::-1]), level=3)
         return matches[0][0]
 
-    output("{:<10}!!! {:>22}".format(kind, gc_uid), level=2)
+    output("Warning: no mapping for author {:<10} {:>22}"
+           .format('[{}]'.format(kind), gc_uid), level=2)
 
     if fallback:
         return options.fallback_user
@@ -466,7 +467,8 @@ def fixup_refs(s, add_ref=None):
         ref = None
 
         value = match.group('value')
-        if value or match.group('link'):
+        link = match.group('link')
+        if value or link:
 
             if match.group('issue'):
                 ref = '#' + str(int(value) + (options.issues_start_from - 1))
@@ -474,7 +476,7 @@ def fixup_refs(s, add_ref=None):
                 try:
                     ref = commit_map[value]
                 except KeyError:
-                    output('FIXME: rev {} not found in commit map'.format(value))
+                    output("Warning: no mapping for commit '{}'".format(value))
 
             filename = match.group('file')
             if filename:
@@ -499,7 +501,8 @@ def fixup_refs(s, add_ref=None):
         if add_ref is not None:
             add_ref(ref)
 
-        output('>>> {:>50}  {}'.format(ref, match.group()), level=3)
+        output("Mapping text ref {:>24} -> {:<6}  :  {:<40}"
+               .format(match.group(), link or value, ref), level=3)
         return ref
 
     return re.sub(REF_RE_TMPL.format(google_project_name), fix_ref, s)
