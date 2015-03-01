@@ -380,7 +380,8 @@ def add_issue_to_github(issue):
 
     for i, comment in enumerate(issue.extra.comments):
         format_message(comment, i+1)
-    write_json(issue.extra.comments, "issues/{}.comments.json".format(issue.number))
+    write_json([comment for comment in issue.extra.comments if comment.body],
+               "issues/{}.comments.json".format(issue.number))
 
 
 ###############################################################################
