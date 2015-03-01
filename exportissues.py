@@ -933,7 +933,7 @@ milestone-label-prefix = Milestone
 milestone-label-date-format = %Y-%m-%d
 cache-attachments = true
 
-""".format(now=datetime.now().isoformat() + "Z")
+""".format(now=datetime.utcnow().replace(microsecond=0).isoformat() + "Z")
 
 
 def main():
