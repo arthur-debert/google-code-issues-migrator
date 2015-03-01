@@ -680,16 +680,16 @@ def get_gcode_comment(issue, comment_pq):
     return comment
 
 
-def get_gcode_issue(issue_summary):
-    output('Importing issue {}'.format(int(issue_summary['ID'])), level=1)
+def get_gcode_issue(summary):
+    output('Importing issue {}'.format(int(summary['ID'])), level=1)
 
     # Populate properties available from the summary CSV
     issue = ExtraNamespace(
-        number     = int(issue_summary['ID']) + (options.issues_start_from - 1),
-        title      = issue_summary['Summary'].replace('%', '&#37;').strip(),
-        state      = 'closed' if issue_summary['Closed'] else 'open',
-        closed_at  = timestamp_to_date(issue_summary['ClosedTimestamp']) if issue_summary['Closed'] else None,
-        created_at = timestamp_to_date(issue_summary['OpenedTimestamp']),
+        number     = int(summary['ID']) + (options.issues_start_from - 1),
+        title      = summary['Summary'].replace('%', '&#37;').strip(),
+        state      = 'closed' if summary['Closed'] else 'open',
+        closed_at  = timestamp_to_date(summary['ClosedTimestamp']) if summary['Closed'] else None,
+        created_at = timestamp_to_date(summary['OpenedTimestamp']),
         updated_at = options.export_date)
 
     if not issue.title:
@@ -698,16 +698,16 @@ def get_gcode_issue(issue_summary):
 
     issue.extra.issue_number = issue.number
 
-    issue.extra.orig_user = issue_summary['Reporter']
+    issue.extra.orig_user = summary['Reporter']
     issue.user = map_author(issue.extra.orig_user, 'reporter')
 
-    issue.extra.orig_owner = issue_summary['Owner']
+    issue.extra.orig_owner = summary['Owner']
     if issue.extra.orig_owner:
         issue.assignee = map_author(issue.extra.orig_owner, 'owner')
     else:
         issue.assignee = None
 
-    issue.extra.link = GOOGLE_ISSUE_PAGE_URL.format(google_project_name, issue_summary['ID'])
+    issue.extra.link = GOOGLE_ISSUE_PAGE_URL.format(google_project_name, summary['ID'])
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
@@ -715,7 +715,7 @@ def get_gcode_issue(issue_summary):
     if options.imported_label:
         issue.labels.append(options.imported_label)
 
-    for label in issue_summary['AllLabels'].split(', ') + [issue_summary['Status']]:
+    for label in summary['AllLabels'].split(', ') + [summary['Status']]:
         milestone = add_label_or_milestone(label, issue.labels)
         if milestone:
             if not hasattr(milestone, 'created_at'):
@@ -775,8 +775,8 @@ def process_gcode_issues():
         issues = [x for x in issues if int(x['ID']) <= options.end_at]
         output('End at issue {}'.format(options.end_at), level=1)
 
-    for issue_summary in issues:
-        issue = get_gcode_issue(issue_summary)
+    for summary in issues:
+        issue = get_gcode_issue(summary)
 
         if options.skip_closed and (issue.state == 'closed'):
             continue
