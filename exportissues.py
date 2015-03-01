@@ -495,15 +495,17 @@ def fixup_refs(s, add_ref=None):
 
 
 def init_attachments(m, pquery):
-    attachments = attachments_cache.get(m.extra.link)
-    if attachments:
-        m.extra.attachments = Namespace(**attachments)
-        output('Gist attachments URL (from cache): {}'
-               .format(m.extra.attachments.url), level=1)
-        return
-    # else:
     m.extra.attachments = None
 
+    if m.extra.link in attachments_cache:
+        attachments = attachments_cache[m.extra.link]
+        if attachments:
+            m.extra.attachments = Namespace(**attachments)
+            output('Gist attachments URL (from cache): {}'
+                   .format(m.extra.attachments.url), level=1)
+        return
+
+    cache_attachments = None
     files = OrderedDict()
     for attachment_pq in pquery('.attachments > table').items():
         for link in attachment_pq('a').items():
@@ -523,6 +525,7 @@ def init_attachments(m, pquery):
         except urllib2.URLError:
             output("FIXME: Unable to get an attachment file '{}' from '{}'"
                    .format(attachment_name, attachment_url))
+            cache_attachments = False
             continue
 
         try:
@@ -530,7 +533,14 @@ def init_attachments(m, pquery):
         except UnicodeDecodeError:
             output("Skipping binary file", level=2)
 
+        if cache_attachments is None:
+            # only set if no files failed to download previously
+            cache_attachments = True
+
     if files:
+        if not cache_attachments:
+            output("Warning: some files have failed to download, "
+                   "Gist will be incomplete")
         data = {'description': (('Issue attachments for {0}#{1}: ' +
                                  GITHUB_ISSUES_PAGE_URL)
                                 .format(options.github_repo, m.extra.issue_number)),
@@ -553,7 +563,8 @@ def init_attachments(m, pquery):
             output('Gist attachments URL: {}'
                    .format(m.extra.attachments.url), level=1)
 
-            attachments_cache[m.extra.link] = m.extra.attachments
+    if cache_attachments:
+        attachments_cache[m.extra.link] = m.extra.attachments
 
 
 def init_message(m, pquery):
