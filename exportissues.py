@@ -36,6 +36,7 @@ GOOGLE_ISSUES_CSV_URL = (GOOGLE_ISSUES_URL +
             'Opened',
             'Closed',
             'Reporter',
+            'Cc',
         ]))
 
 GOOGLE_ISSUE_PAGE_URL = GOOGLE_ISSUES_URL +'/detail?id={}'
@@ -288,9 +289,13 @@ def format_markdown(m, comment_nr=0):
         body = messages[msg_id] = format_md_body(m.extra.paragraphs)
 
     if is_issue:
+        if m.extra.cc:
+            footer += "Cc: {}".format(format_list(m.extra.cc, '@{}'))
         if not m.assignee and m.extra.orig_owner:
-            footer = ("> Originally assigned to {s_orig_owner}"
-                      .format(s_orig_owner=format_md_user(m, 'orig_owner')))
+            if footer:
+                footer += '\n'
+            footer += ("> Originally assigned to {s_orig_owner}"
+                       .format(s_orig_owner=format_md_user(m, 'orig_owner')))
     else:
         footer = format_md_updates(m.extra.updates)
 
@@ -418,7 +423,7 @@ def join_paragraphs(paragraphs):
     return '\n\n'.join(title + '\n' + body for title, body in paragraphs).strip()
 
 
-def map_author(gc_uid, kind=None):
+def map_author(gc_uid, kind=None, fallback=True):
     email_pat = gc_uid
     if '@' not in email_pat:
         email_pat += '@gmail.com'
@@ -440,7 +445,8 @@ def map_author(gc_uid, kind=None):
 
     output("{:<10}!!! {:>22}".format(kind, gc_uid), level=2)
 
-    return options.fallback_user
+    if fallback:
+        return options.fallback_user
 
 
 def fixup_refs(s, add_ref=None):
@@ -707,6 +713,9 @@ def get_gcode_issue(summary):
     else:
         issue.assignee = None
 
+    issue.extra.cc = filter(None, (map_author(cc, 'cc', fallback=False)
+                                   for cc in filter(None, summary['Cc'].split(', '))))
+
     issue.extra.link = GOOGLE_ISSUE_PAGE_URL.format(google_project_name, summary['ID'])
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
@@ -715,7 +724,7 @@ def get_gcode_issue(summary):
     if options.imported_label:
         issue.labels.append(options.imported_label)
 
-    for label in summary['AllLabels'].split(', ') + [summary['Status']]:
+    for label in filter(None, summary['AllLabels'].split(', ')) + [summary['Status']]:
         milestone = add_label_or_milestone(label, issue.labels)
         if milestone:
             if not hasattr(milestone, 'created_at'):
