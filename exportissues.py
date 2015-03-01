@@ -602,8 +602,8 @@ def init_message(m, pquery):
     init_attachments(m, pquery)
 
 
-def add_label_or_milestone(label, labels_to_add):
-    milestone = get_or_create_milestone(label)
+def get_milestone_or_add_label(label, labels_to_add):
+    milestone = get_milestone(label)
     if milestone:
         return milestone
 
@@ -649,7 +649,7 @@ def get_gcode_updates(updates_pq):
                         lst.append(ref)
 
                 elif key == 'Labels':
-                    milestone = add_label_or_milestone(word, lst)
+                    milestone = get_milestone_or_add_label(word, lst)
                     if milestone:
                         if is_removed:
                             updates.old_milestone = milestone.title
@@ -737,7 +737,7 @@ def get_gcode_issue(summary):
         issue.labels.append(options.imported_label)
 
     for label in filter(None, summary['AllLabels'].split(', ')) + [summary['Status']]:
-        milestone = add_label_or_milestone(label, issue.labels)
+        milestone = get_milestone_or_add_label(label, issue.labels)
         if milestone:
             if not hasattr(milestone, 'created_at'):
                 milestone.created_at = issue.created_at
@@ -810,7 +810,7 @@ def process_gcode_issues():
             write_json(m, 'milestones/{}.json'.format(m.number))
 
 
-def get_or_create_milestone(label, warn_duplicate=False):
+def get_milestone(label, initializing=False):
     global milestones
 
     kind, _, value = label.partition('-')
@@ -824,11 +824,14 @@ def get_or_create_milestone(label, warn_duplicate=False):
     try:
         milestone = milestones[value]
     except KeyError:
+        if not initializing and not options.create_missing_milestones:
+            output("Warning: Discarding milestone '{}'".format(value))
+            return
         milestone = milestones[value] = Namespace(
            number = len(milestones) + options.milestones_start_from,
            title  = value)
     else:
-        if warn_duplicate:
+        if initializing:
             output("Warning: Duplicate milestone: '{}'".format(value))
 
     return milestone
@@ -836,7 +839,7 @@ def get_or_create_milestone(label, warn_duplicate=False):
 
 def extract_milestone_labels(label_map):
     for label, description in label_map.items():
-        milestone = get_or_create_milestone(label, warn_duplicate=True)
+        milestone = get_milestone(label, initializing=True)
         if not milestone:
             if len(description.split()) > 1:
                 output("Warning: Non-singleword GitHub issue label: '{}'"
@@ -943,6 +946,7 @@ messages-output
 imported-label = imported
 milestone-label-prefix = Milestone
 milestone-label-date-format = %Y-%m-%d
+create-missing-milestones = true
 cache-attachments = true
 
 """.format(now=datetime.utcnow().replace(microsecond=0).isoformat() + "Z")
@@ -987,7 +991,7 @@ def main():
 
     github.add_option('--github-repo',
             default=config.get('github', 'repo'),
-            help='Used to construct URLs if --absolute-links is given')
+            help='Used to construct URLs in issues and descriptions of Gist attachments')
     github.add_option('--fallback-user',
             default=config.get('github', 'fallback-user'),
             help='Default username (e.g. bot account) to use for unknown users')
@@ -1045,9 +1049,13 @@ def main():
             default=config.get('misc', 'milestone-label-date-format'),
             help='Format of [date] for milestones taken from the labels config')
 
-    misc.add_option('--no-cache-attachments',
-            action='store_false', dest='cache_attachments',
-            default=config.get('misc', 'cache-attachments'),
+    misc.add_option('--create-missing-milestones', action='store_true',
+            default=config.getboolean('misc', 'create-missing-milestones'),
+            help='Allow issues to reference milestones missing in labels.ini')
+
+    misc.add_option('--no-cache-attachments', action='store_false',
+            dest='cache_attachments',
+            default=config.getboolean('misc', 'cache-attachments'),
             help='Download all attachments and create new Gists from scratch')
 
     parser.add_option_group(misc)
@@ -1074,9 +1082,8 @@ def main():
 
     if not options.github_repo:
         options.github_repo = '{0}/{0}'.format(google_project_name)
-        if options.absolute_links:  # otherwise unused
-            output("Warning: GitHub repo name is set to '{}'"
-                   .format(options.github_repo))
+        output("Note: GitHub repo name is set to '{}'"
+               .format(options.github_repo))
 
     if options.authors_json:
         author_map.update(read_json(options.authors_json))
