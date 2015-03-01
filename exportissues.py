@@ -109,6 +109,19 @@ class ExtraNamespace(Namespace):
         self.extra = Namespace()
 
 
+def uniq(iterable):
+    """List unique elements, preserving order."""
+    seen = set()
+    remember = seen.add
+    for el in iterable:
+        if el not in seen:
+            remember(el)
+            yield el
+
+def non_empty(iterable):
+    return (el for el in iterable if el)
+
+
 def read_json(filename):
     with open(filename, "r") as fp:
         return json.load(fp)
@@ -636,7 +649,7 @@ def get_gcode_updates(updates_pq):
             new_lst = updates.__dict__['new_'+key.lower()]
             old_lst = updates.__dict__['old_'+key.lower()]
 
-            for word in value.split():
+            for word in uniq(value.split()):
                 is_removed = word.startswith('-')
                 if is_removed:
                     word = word[1:]
@@ -725,8 +738,11 @@ def get_gcode_issue(summary):
     else:
         issue.assignee = None
 
-    issue.extra.cc = filter(None, (map_author(cc, 'cc', fallback=False)
-                                   for cc in filter(None, summary['Cc'].split(', '))))
+    issue.extra.cc = list(uniq(non_empty(map_author(cc, 'cc', fallback=False)
+                                         for cc in summary['Cc'].split(', ')
+                                         if cc)))
+    if issue.user in issue.extra.cc:
+        issue.extra.cc.remove(issue.user)
 
     issue.extra.link = GOOGLE_ISSUE_PAGE_URL.format(google_project_name, summary['ID'])
 
@@ -736,7 +752,7 @@ def get_gcode_issue(summary):
     if options.imported_label:
         issue.labels.append(options.imported_label)
 
-    for label in filter(None, summary['AllLabels'].split(', ')) + [summary['Status']]:
+    for label in uniq(non_empty(summary['AllLabels'].split(', ') + [summary['Status']])):
         milestone = get_milestone_or_add_label(label, issue.labels)
         if milestone:
             if not hasattr(milestone, 'created_at'):
