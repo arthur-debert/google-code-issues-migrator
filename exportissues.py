@@ -218,11 +218,11 @@ def format_md_updates(u):
     lines = []
     emit = lines.append
 
-    if u.orig_owner == '---':
-        emit("Unassigned")
-    elif u.orig_owner:
+    if u.orig_owner:
         emit("Assigned to {s_owner}")
         s_owner = format_md_user(u, 'owner')
+    elif u.orig_owner == '':
+        emit("Unassigned")
 
     if u.status in closed_labels:
         if u.close_commit:
@@ -232,10 +232,10 @@ def format_md_updates(u):
     elif u.status:
         emit("Reopened, status set to **{u.status}**")
 
-    if u.mergedinto == '---':
-        emit("Unmerged")
-    elif u.mergedinto:
+    if u.mergedinto:
         emit("Merged into **#{u.mergedinto}**")
+    elif u.mergedinto == 0:
+        emit("Unmerged")
 
     if u.merged_issue:
         emit("Issue **#{u.merged_issue}** has been merged into this issue")
@@ -674,8 +674,11 @@ def get_gcode_updates(updates_pq):
                 old_lst.remove(el)
 
         if key == 'Owner':
+            if value == '---':
+                value = ''
             updates.orig_owner = value
-            updates.owner = map_author(value, 'owner')
+            if value:
+                updates.owner = map_author(value, 'owner')
 
         elif key == 'Status':
             updates.status = value
@@ -685,7 +688,7 @@ def get_gcode_updates(updates_pq):
             if ref_text:
                 updates.mergedinto = int(ref_text) + (options.issues_start_from - 1)
             else:
-                updates.mergedinto = '---'
+                updates.mergedinto = 0
 
     return updates
 
@@ -730,14 +733,18 @@ def get_gcode_issue(summary):
 
     issue.extra.issue_number = issue.number
 
-    issue.extra.orig_user = summary['Reporter']
-    issue.user = map_author(issue.extra.orig_user, 'reporter')
+    orig_user = summary['Reporter']
+    issue.user = map_author(orig_user, 'reporter')
+    issue.extra.orig_user = orig_user
 
-    issue.extra.orig_owner = summary['Owner']
-    if issue.extra.orig_owner:
-        issue.assignee = map_author(issue.extra.orig_owner, 'owner')
+    orig_owner = summary['Owner']
+    if orig_owner == '---':
+        orig_owner = ''
+    if orig_owner:
+        issue.assignee = map_author(orig_owner, 'owner')
     else:
         issue.assignee = None
+    issue.extra.orig_owner = orig_owner
 
     issue.extra.cc = list(uniq(non_empty(map_author(cc, 'cc', fallback=False)
                                          for cc in summary['Cc'].split(', ')
