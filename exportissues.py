@@ -48,14 +48,8 @@ GITHUB_ISSUES_URL = 'https://github.com/{0}/issues'
 GITHUB_SOURCE_PAGE_URL = GITHUB_SOURCE_URL + '/{1}/{2}'  # ref/path
 GITHUB_ISSUES_PAGE_URL = GITHUB_ISSUES_URL + '/{1}'      # number
 
-milestones    = OrderedDict()
-label_map     = {}
-open_labels   = {}
-closed_labels = {}
-author_map    = {}
-commit_map    = {}
-messages      = OrderedDict()
 
+milestones    = OrderedDict()
 
 ###############################################################################
 
@@ -1120,15 +1114,18 @@ def main():
         output("Note: GitHub repo name is set to '{}'"
                .format(options.github_repo))
 
+    author_map = {}
     if options.authors_json:
         author_map.update(read_json(options.authors_json))
 
+    label_map = {}
     if options.labels_ini:
         labels_config = read_ini(options.labels_ini,
                                  'open', 'closed', 'labels', 'milestones')
 
-        open_labels.update(labels_config.open)
-        closed_labels.update(labels_config.closed)
+        open_labels   = labels_config.open
+        closed_labels = labels_config.closed
+
         for labels in open_labels, closed_labels, labels_config.labels:
             label_map.update(labels)
 
@@ -1138,7 +1135,11 @@ def main():
                        .format(label, gh_label))
 
         init_milestones(labels_config.milestones)
+    else:
+        open_labels   = {}
+        closed_labels = {}
 
+    commit_map = {}
     for map_filename in reversed(options.commits_map):
         tmp_map = commit_map
         commit_map = {}
@@ -1158,6 +1159,8 @@ def main():
 
     if options.messages_input:
         messages = read_messages(options.messages_input)
+    else:
+        messages = OrderedDict()
 
     if options.cache_attachments:
         try:
