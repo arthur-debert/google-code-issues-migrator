@@ -445,15 +445,15 @@ def map_author(gc_uid, kind=None, fallback=True):
     matches = []
     for email, gh_user in author_map.items():
         if email_re.match(email):
-            matches.append((email, gh_user))
-    if len(matches) > 1:
+            matches.append((gh_user, email))
+    if len(dict(matches)) > 1:
         output('FIXME: multiple matches for {gc_uid}'.format(**locals()))
         for email, gh_user in matches:
             output('\t{email}'.format(**locals()))
     elif matches:
         output("{:<10}    {:>22} -> {:>32}:   {:<16}"
-               .format(kind, gc_uid, *matches[0]), level=3)
-        return matches[0][1]
+               .format(kind, gc_uid, *matches[0][::-1]), level=3)
+        return matches[0][0]
 
     output("{:<10}!!! {:>22}".format(kind, gc_uid), level=2)
 
