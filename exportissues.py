@@ -898,17 +898,22 @@ def config_section(config, section_name):
         section[option] = config.get(section_name, option)
     return section
 
-def read_ini(filename):
+def read_ini(filename, *section_names):
     config = RawConfigParser()
     config.optionxform = str
 
     config.read(filename)
 
-    sections = OrderedDict()
+    sections_dict = OrderedDict()
 
     for section_name in config.sections():
-        sections[section_name] = config_section(config, section_name)
+        sections_dict[section_name] = config_section(config, section_name)
+    for section_name in section_names:
+        if section_name not in sections_dict:
+            sections_dict[section_name] = OrderedDict()
 
+    sections = Namespace()
+    sections.__dict__ = sections_dict
     return sections
 
 def read_messages(filename):
@@ -1119,11 +1124,12 @@ def main():
         author_map.update(read_json(options.authors_json))
 
     if options.labels_ini:
-        labels_config = read_ini(options.labels_ini)
+        labels_config = read_ini(options.labels_ini,
+                                 'open', 'closed', 'labels', 'milestones')
 
-        open_labels.update(labels_config.get('open', {}))
-        closed_labels.update(labels_config.get('closed', {}))
-        for labels in open_labels, closed_labels, labels_config.get('labels', {}):
+        open_labels.update(labels_config.open)
+        closed_labels.update(labels_config.closed)
+        for labels in open_labels, closed_labels, labels_config.labels:
             label_map.update(labels)
 
         for label, gh_label in label_map.items():
@@ -1131,7 +1137,7 @@ def main():
                 output("Warning: '{}' issue label maps to a non-singleword '{}'"
                        .format(label, gh_label))
 
-        init_milestones(labels_config.get('milestones', {}))
+        init_milestones(labels_config.milestones)
 
     for map_filename in reversed(options.commits_map):
         tmp_map = commit_map
