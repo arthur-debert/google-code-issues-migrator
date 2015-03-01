@@ -488,6 +488,13 @@ def fixup_refs(s, add_ref=None):
 
 
 def init_attachments(m, pquery):
+    attachments = attachments_cache.get(m.extra.link)
+    if attachments:
+        m.extra.attachments = Namespace(**attachments)
+        output('Gist attachments URL (from cache): {}'
+               .format(m.extra.attachments.url), level=1)
+        return
+    # else:
     m.extra.attachments = None
 
     files = OrderedDict()
@@ -536,8 +543,10 @@ def init_attachments(m, pquery):
                 url=response['html_url'],
                 files=OrderedDict((name, obj['raw_url'])
                                   for name, obj in response['files'].items()))
-            output('Gist attachments URL: {}'.format(m.extra.attachments.url),
-                   level=1)
+            output('Gist attachments URL: {}'
+                   .format(m.extra.attachments.url), level=1)
+
+            attachments_cache[m.extra.link] = m.extra.attachments
 
 
 def init_message(m, pquery):
@@ -913,6 +922,7 @@ messages-output
 imported-label = imported
 milestone-label-prefix = Milestone
 milestone-label-date-format = %Y-%m-%d
+cache-attachments = true
 
 """.format(now=datetime.now().isoformat() + "Z")
 
@@ -925,6 +935,7 @@ def main():
     global label_map
     global commit_map
     global messages
+    global attachments_cache
 
     config = RawConfigParser(allow_no_value=True)
     config.optionxform = str
@@ -1013,6 +1024,11 @@ def main():
             default=config.get('misc', 'milestone-label-date-format'),
             help='Format of [date] for milestones taken from the labels config')
 
+    misc.add_option('--no-cache-attachments',
+            action='store_false', dest='cache_attachments',
+            default=config.get('misc', 'cache-attachments'),
+            help='Download all attachments and create new Gists from scratch')
+
     parser.add_option_group(misc)
 
 
@@ -1073,12 +1089,23 @@ def main():
     if options.messages_input:
         messages = read_messages(options.messages_input)
 
+    if options.cache_attachments:
+        try:
+            attachments_cache = read_json('.attachments-cache.json')
+        except IOError:
+            attachments_cache = {}
+
     try:
         process_gcode_issues()
     except Exception:
         output()
         parser.print_help()
         raise
+    finally:
+        try:
+            write_json(attachments_cache, '.attachments-cache.json')
+        except IOError:
+            output("Warning: unable to save attachments cache")
 
     if options.messages_output:
         write_messages(messages, options.messages_output)
