@@ -15,6 +15,8 @@ import re
 import sys
 import urllib2
 
+from collections import Counter
+from collections import defaultdict
 from collections import OrderedDict
 from ConfigParser import RawConfigParser
 from datetime import datetime
@@ -49,7 +51,9 @@ GITHUB_SOURCE_PAGE_URL = GITHUB_SOURCE_URL + '/{1}/{2}'  # ref/path
 GITHUB_ISSUES_PAGE_URL = GITHUB_ISSUES_URL + '/{1}'      # number
 
 
-milestones    = OrderedDict()
+milestones      = OrderedDict()
+missing_authors = defaultdict(Counter)
+
 
 ###############################################################################
 
@@ -427,15 +431,21 @@ def map_author(gc_uid, kind=None, fallback=True):
             matches.append((gh_user, email))
     if len(dict(matches)) > 1:
         output('FIXME: multiple matches for {gc_uid}'.format(**locals()))
-        for email, gh_user in matches:
+        for gh_user, email in matches:
             output('\t{email}'.format(**locals()))
     elif matches:
-        output("Mapping {:<10} {:>22} -> {:>30}  :  {}"
-               .format('[{}]'.format(kind), gc_uid, *matches[0][::-1]), level=3)
-        return matches[0][0]
+        gh_user, email = matches[0]
+        if gh_user:
+            output("Mapping {:<10} {:>22} -> {:>30}  :  {}"
+                   .format('[{}]'.format(kind), gc_uid, email, gh_user), level=3)
+            return gh_user
+        else:
+            gc_uid = email
 
     output("Warning: no mapping for author {:<10} {:>22}"
            .format('[{}]'.format(kind), gc_uid), level=2)
+
+    missing_authors[kind][gc_uid] += 1
 
     if fallback:
         return options.fallback_user
@@ -1182,6 +1192,19 @@ def main():
 
     if options.messages_output:
         write_messages(messages, options.messages_output)
+
+    missing_authors_total = Counter()
+    for author_kind, counts in (sorted(missing_authors.items()) +
+                                [('TOTAL (except cc)', missing_authors_total)]):
+        if not counts:
+            continue
+        output('Missing {} authors:'.format(author_kind), level=1)
+        for author_email, count in counts.most_common():
+            output('{:>4} {}'.format(count, author_email))
+
+        if counts is not missing_authors_total and author_kind != 'cc':
+            missing_authors_total.update(counts)
+
 
 if __name__ == "__main__":
     main()
