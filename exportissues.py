@@ -138,19 +138,10 @@ def timestamp_to_date(timestamp):
 
 
 def gt(dt_str):
-    return datetime.strptime(dt_str.rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
-
+    return datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%SZ")
 
 def reindent(s, n=4):
     return "\n".join((n * " ") + i for i in s.splitlines())
-
-def filter_unicode(s):
-    for ch in s:
-        if ch >= u"\uffff":
-            output(" FIXME: unicode %s" % hex(ord(ch)))
-            yield "FIXME: unicode %s" % hex(ord(ch))
-        else:
-            yield ch
 
 
 ###############################################################################
@@ -266,6 +257,7 @@ def format_md_updates(u):
 
     return '\n'.join('> {}'.format(line) for line in lines).format(**locals())
 
+
 def format_markdown(m, comment_nr=0):
     is_issue = (comment_nr == 0)
 
@@ -309,6 +301,7 @@ def format_markdown(m, comment_nr=0):
         if footer: yield footer
 
     return '\n'.join(gen_msg_blocks())
+
 
 def format_textile(m, comment_nr=0):
     is_issue = (comment_nr == 0)
@@ -803,7 +796,7 @@ def get_gcode_issue(summary):
 
     return issue
 
-def get_gcode_issues():
+def get_gcode_issue_summaries():
     issues = []
     while True:
         url = GOOGLE_ISSUES_CSV_URL.format(google_project_name,
@@ -822,24 +815,21 @@ def get_gcode_issues():
 def process_gcode_issues():
     """ Migrates all Google Code issues in the given dictionary to Github. """
 
-    issues = get_gcode_issues()
-    previous_gid = 1
+    issues = get_gcode_issue_summaries()
 
     if options.start_at is not None:
-        issues = [x for x in issues if int(x['ID']) >= options.start_at]
-        previous_gid = options.start_at - 1
         output('Starting at issue {}'.format(options.start_at), level=1)
+        issues = [x for x in issues if int(x['ID']) >= options.start_at]
 
     if options.end_at is not None:
-        issues = [x for x in issues if int(x['ID']) <= options.end_at]
         output('End at issue {}'.format(options.end_at), level=1)
+        issues = [x for x in issues if int(x['ID']) <= options.end_at]
 
     for summary in issues:
-        issue = get_gcode_issue(summary)
-
-        if options.skip_closed and (issue.state == 'closed'):
+        if options.skip_closed and summary['Closed']:
             continue
 
+        issue = get_gcode_issue(summary)
         add_issue_to_github(issue)
 
     if milestones:
