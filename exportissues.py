@@ -708,15 +708,19 @@ def get_gcode_comment(issue, comment_pq):
     comment.extra.link = issue.extra.link + '#' + comment_pq('a').attr('name')
     comment.extra.updates = get_gcode_updates(comment_pq('.updates .box-inner'))
 
+    comment.extra.orig_user = comment_pq('.userlink').text()
+    comment.user = map_author(comment.extra.orig_user, 'comment')
+
+    if issue.state == 'closed' and comment.extra.updates.status in closed_labels:
+        if comment.user:
+            issue.closed_by = comment.user
+
     init_message(comment, comment_pq)
 
     paragraphs = comment.extra.paragraphs
     if len(paragraphs) > 1 or paragraphs and paragraphs[0][0]:
         output("FIXME: unexpected paragraph structure in {}"
                .format(comment.link))
-
-    comment.extra.orig_user  = comment_pq('.userlink').text()
-    comment.user = map_author(comment.extra.orig_user, 'comment')
 
     return comment
 
