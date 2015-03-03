@@ -411,7 +411,10 @@ def join_paragraphs(paragraphs):
     return '\n\n'.join(title + '\n' + body for title, body in paragraphs).strip()
 
 
-def map_author(gc_uid, kind=None, fallback=True):
+def map_author(gc_uid, kind=None):
+    if not gc_uid:
+        return
+
     email_pat = gc_uid
     if '@' not in email_pat:
         email_pat += '@gmail.com'
@@ -439,9 +442,6 @@ def map_author(gc_uid, kind=None, fallback=True):
            .format('[{}]'.format(kind), gc_uid), level=2)
 
     missing_authors[kind][gc_uid] += 1
-
-    if fallback:
-        return options.fallback_user
 
 
 # Format with google_project_name
@@ -684,8 +684,7 @@ def get_gcode_updates(updates_pq):
             if value == '---':
                 value = ''
             updates.orig_owner = value
-            if value:
-                updates.owner = map_author(value, 'owner')
+            updates.owner = map_author(updates.orig_owner, 'owner')
 
         elif key == 'Status':
             updates.status = value
@@ -747,15 +746,11 @@ def get_gcode_issue(summary):
     orig_owner = summary['Owner']
     if orig_owner == '---':
         orig_owner = ''
-    if orig_owner:
-        issue.assignee = map_author(orig_owner, 'owner')
-    else:
-        issue.assignee = None
+    issue.assignee = map_author(orig_owner, 'owner')
     issue.extra.orig_owner = orig_owner
 
-    issue.extra.cc = list(uniq(non_empty(map_author(cc, 'cc', fallback=False)
-                                         for cc in summary['Cc'].split(', ')
-                                         if cc)))
+    issue.extra.cc = list(uniq(non_empty(map_author(cc, 'cc')
+                                         for cc in summary['Cc'].split(', '))))
     if issue.user in issue.extra.cc:
         issue.extra.cc.remove(issue.user)
 
@@ -957,7 +952,6 @@ skip-closed = false
 
 [github]
 repo
-fallback-user
 absolute-links = false
 issues-start-from     = 1
 milestones-start-from = 1
@@ -1021,9 +1015,6 @@ def main():
     github.add_option('--github-repo',
             default=config.get('github', 'repo'),
             help='Used to construct URLs in issues and descriptions of Gist attachments')
-    github.add_option('--fallback-user',
-            default=config.get('github', 'fallback-user'),
-            help='Default username (e.g. bot account) to use for unknown users')
     github.add_option('--absolute-links', action='store_true',
             default=config.getboolean('github', 'absolute-links'),
             help='Absolute URLs in links to issues and source files')
