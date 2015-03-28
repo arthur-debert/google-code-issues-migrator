@@ -159,7 +159,7 @@ def format_list(lst, fmt='{}', sep=', ', last_sep=None):
 
 def format_md_user(ns, kind='user'):
     if not kind.startswith('orig_'):
-        user = getattr(ns, kind, None)
+        user = getattr(ns, kind if kind != 'owner' else 'assignee', None)
         if user:
             return '@' + user  # GitHub @mention
         kind = 'orig_' + kind
@@ -277,11 +277,12 @@ def format_markdown(m, comment_nr=0):
     if is_issue:
         if m.extra.cc:
             footer += "Cc: {}".format(format_list(m.extra.cc, '@{}'))
-        if not m.assignee and m.extra.orig_owner:
+        if (m.assignee not in options.members or
+            not m.assignee and m.extra.orig_owner):
             if footer:
                 footer += '\n'
-            footer += ("> Originally assigned to {s_orig_owner}"
-                       .format(s_orig_owner=format_md_user(m, 'orig_owner')))
+            footer += ("> Originally assigned to {s_owner}"
+                       .format(s_owner=format_md_user(m, 'owner')))
     else:
         footer = format_md_updates(m.extra.updates)
 
@@ -956,6 +957,7 @@ skip-closed = false
 
 [github]
 repo
+members =
 absolute-links = false
 issues-start-from     = 1
 milestones-start-from = 1
@@ -1019,6 +1021,10 @@ def main():
     github.add_option('--github-repo',
             default=config.get('github', 'repo'),
             help='Used to construct URLs in issues and descriptions of Gist attachments')
+    github.add_option('--members', action='append',
+            default=[f.strip() for f in config.get('github', 'members').split(',')
+                     if f.strip()],
+            help='Repository collaborators / organization members')
     github.add_option('--absolute-links', action='store_true',
             default=config.getboolean('github', 'absolute-links'),
             help='Absolute URLs in links to issues and source files')
