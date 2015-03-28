@@ -273,9 +273,11 @@ def format_markdown(m, comment_nr=0):
 
     msg_id = m.extra.link
     try:
-        body = messages[msg_id].strip()
+        body = messages[msg_id]
     except KeyError:
-        body = messages[msg_id] = format_md_body(m.extra.paragraphs)
+        body = format_md_body(m.extra.paragraphs)
+        if body:
+            messages[msg_id] = body
 
     if is_issue:
         if m.extra.cc:
@@ -932,6 +934,9 @@ def read_messages(filename):
             messages.setdefault(msg_id, '')
     messages.pop(None, None)
 
+    for msg_id, body in messages.items():
+        messages[msg_id] = body.strip()
+
     output("Read {} overrides from {}".format(len(messages), filename))
 
     return messages
@@ -946,7 +951,7 @@ def write_messages(messages, filename):
         for msg_id, body in messages.items():
             f.write('<!--  {}   {}  -->\n'
                     .format(msg_id, hashlib.md5(msg_id).hexdigest()))
-            f.write(body.strip())
+            f.write(body)
             f.write('\n\n')
 
 
