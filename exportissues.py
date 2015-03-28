@@ -20,6 +20,7 @@ from collections import defaultdict
 from collections import OrderedDict
 from ConfigParser import RawConfigParser
 from datetime import datetime
+from datetime import timedelta
 from pyquery import PyQuery as pq
 
 
@@ -125,16 +126,18 @@ def output(string='', level=0, fp=sys.stdout):
         fp.flush()
 
 
+GCODE_DATE_OFFSET = timedelta(hours=7)
+
 def parse_gcode_date(date_text):
     """ Transforms a Google Code date into a more human readable string. """
     try:
-        parsed = datetime.strptime(date_text, '%a %b %d %H:%M:%S %Y').isoformat()
-        return parsed + "Z"
+        parsed = datetime.strptime(date_text, '%a %b %d %H:%M:%S %Y')
+        return (parsed + GCODE_DATE_OFFSET).isoformat() + "Z"
     except ValueError:
         return date_text
 
 def timestamp_to_date(timestamp):
-    return datetime.fromtimestamp(long(timestamp)).isoformat() + "Z"
+    return datetime.utcfromtimestamp(long(timestamp)).isoformat() + "Z"
 
 
 def gt(dt_str):
