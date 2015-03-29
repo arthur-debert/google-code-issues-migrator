@@ -282,8 +282,8 @@ def format_markdown(m, comment_nr=0):
     if is_issue:
         if m.extra.cc:
             footer += "Cc: {}".format(format_list(m.extra.cc, '@{}'))
-        if (m.assignee not in options.members or
-            not m.assignee and m.extra.orig_owner):
+        if (m.assignee not in options.members if m.assignee else
+            m.extra.orig_owner):
             if footer:
                 footer += '\n'
             footer += ("> Originally assigned to {s_owner}"
@@ -642,7 +642,7 @@ def get_milestone_or_add_label(label, labels_to_add):
 def get_gcode_updates(updates_pq):
     updates = Namespace(
         orig_owner    = None,
-        owner         = None,
+        assignee      = None,
         status        = None,
         mergedinto    = None,
         new_milestone = None,
@@ -690,7 +690,7 @@ def get_gcode_updates(updates_pq):
             if value == '---':
                 value = ''
             updates.orig_owner = value
-            updates.owner = map_author(updates.orig_owner, 'owner')
+            updates.assignee = map_author(updates.orig_owner, 'owner')
 
         elif key == 'Status':
             updates.status = value
