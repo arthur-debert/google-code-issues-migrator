@@ -282,8 +282,9 @@ def format_markdown(m, comment_nr=0):
     if is_issue:
         if m.extra.cc:
             footer += "Cc: {}".format(format_list(m.extra.cc, '@{}'))
-        if (m.assignee not in options.members if m.assignee else
-            m.extra.orig_owner):
+        if (m.extra.initially_assigned and
+            (m.assignee not in options.members if m.assignee else
+             m.extra.orig_owner)):
             if footer:
                 footer += '\n'
             footer += ("> Originally assigned to {s_owner}"
@@ -721,6 +722,9 @@ def get_gcode_comment(issue, comment_pq):
         if comment.user:
             issue.closed_by = comment.user
 
+    if comment.extra.updates.orig_owner is not None:
+        issue.extra.initially_assigned = False
+
     init_message(comment, comment_pq)
 
     paragraphs = comment.extra.paragraphs
@@ -758,6 +762,7 @@ def get_gcode_issue(summary):
         orig_owner = ''
     issue.assignee = map_author(orig_owner, 'owner')
     issue.extra.orig_owner = orig_owner
+    issue.extra.initially_assigned = bool(orig_owner)
 
     issue.extra.cc = list(uniq(non_empty(map_author(cc, 'cc')
                                          for cc in summary['Cc'].split(', '))))
