@@ -881,7 +881,7 @@ def init_milestones(milestone_label_map):
         if not milestone:
             continue
 
-        milestone.state  = 'closed',  # unless there will be any open issues encountered
+        milestone.state  = 'closed'  # unless there will be any open issues encountered
 
         date_match = re.match(r'^\[([^\]]+)\]\s*', description)
         if date_match:
