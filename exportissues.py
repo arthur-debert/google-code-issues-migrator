@@ -271,12 +271,12 @@ def format_markdown(m, comment_nr=0):
 
     if is_issue:
         if m.extra.cc:
-            footer += "Cc: {}".format(format_list(m.extra.cc, '@{}'))
+            if body:
+                body += '\n\n'
+            body += "Cc: {}".format(format_list(m.extra.cc, '@{}'))
         if (m.extra.initially_assigned and
             (m.assignee not in options.members if m.assignee else
              m.extra.orig_owner)):
-            if footer:
-                footer += '\n'
             footer += ("> Originally assigned to {s_owner}"
                        .format(s_owner=format_md_user(m, 'owner')))
     else:
@@ -286,7 +286,7 @@ def format_markdown(m, comment_nr=0):
         a = m.extra.attachments
         if footer:
             footer += '\n>\n'
-        footer += ("Attached {s_files} ([view{s_plural} on Gist]({a.url}))"
+        footer += ("> Attached {s_files} ([view{s_plural} on Gist]({a.url}))"
                    .format(s_files=format_list(a.files.items(),
                                                '[**`{0[0]}`**]({0[1]})'),
                            s_plural=' all' * (len(a.files) > 1), **locals()))
