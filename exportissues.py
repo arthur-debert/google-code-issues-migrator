@@ -248,16 +248,6 @@ def format_md_updates(u):
     elif s_old_labels:
         emit("Removed {s_old_labels} label{s_labels_plural}")
 
-    s_new_labels = format_list(u.new_labels, '**`{}`**')
-    s_old_labels = format_list(u.old_labels, '**`{}`**')
-    s_labels_plural = 's' * (len(u.new_labels) + len(u.old_labels) > 1)
-    if s_new_labels and s_old_labels:
-        emit("Added {s_new_labels} and removed {s_old_labels} labels")
-    elif s_new_labels:
-        emit("Added {s_new_labels} label{s_labels_plural}")
-    elif s_old_labels:
-        emit("Removed {s_old_labels} label{s_labels_plural}")
-
     return '\n'.join('> {}'.format(line) for line in lines).format(**locals())
 
 
