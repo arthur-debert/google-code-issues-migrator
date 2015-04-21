@@ -201,22 +201,15 @@ def format_md_updates(u):
     elif u.orig_owner == '':
         emit("Unassigned")
 
-    if u.close_commit:
-        emit("Closed in **{u.close_commit}**")
-    elif u.status and not u.state:
-        emit("Changed status to **{u.status}**")
-    elif u.state == 'closed':
-        emit("Closed with status **{u.status}**")
-    elif u.state == 'open':
-        emit("Reopened, status set to **{u.status}**")
-
-    if u.mergedinto:
-        emit("Merged into **#{u.mergedinto}**")
-    elif u.mergedinto == 0:
-        emit("Unmerged")
-
-    if u.merged_issue:
-        emit("Issue **#{u.merged_issue}** has been merged into this issue")
+    s_new_labels = format_list(u.new_labels, '**`{}`**')
+    s_old_labels = format_list(u.old_labels, '**`{}`**')
+    s_labels_plural = 's' * (len(u.new_labels) + len(u.old_labels) > 1)
+    if s_new_labels and s_old_labels:
+        emit("Added {s_new_labels} and removed {s_old_labels} labels")
+    elif s_new_labels:
+        emit("Added {s_new_labels} label{s_labels_plural}")
+    elif s_old_labels:
+        emit("Removed {s_old_labels} label{s_labels_plural}")
 
     if u.old_milestone and u.new_milestone:
         emit("Moved from the **{u.old_milestone}** milestone to **{u.new_milestone}**")
@@ -224,6 +217,14 @@ def format_md_updates(u):
         emit("Removed from the **{u.old_milestone}** milestone")
     elif u.new_milestone:
         emit("Added to the **{u.new_milestone}** milestone")
+
+    if u.mergedinto:
+        emit("Merged into **#{u.mergedinto}**")
+    elif u.mergedinto == 0:
+        emit("Unmerged")
+
+    if u.merged_issue:
+        emit("**#{u.merged_issue}** has been merged into this issue")
 
     s_old_blocking = format_list(u.old_blocking, '**#{}**')
     s_new_blocking = format_list(u.new_blocking, '**#{}**')
@@ -239,15 +240,14 @@ def format_md_updates(u):
     if s_new_blockedon:
         emit("Blocked on {s_new_blockedon}")
 
-    s_new_labels = format_list(u.new_labels, '**`{}`**')
-    s_old_labels = format_list(u.old_labels, '**`{}`**')
-    s_labels_plural = 's' * (len(u.new_labels) + len(u.old_labels) > 1)
-    if s_new_labels and s_old_labels:
-        emit("Added {s_new_labels} and removed {s_old_labels} labels")
-    elif s_new_labels:
-        emit("Added {s_new_labels} label{s_labels_plural}")
-    elif s_old_labels:
-        emit("Removed {s_old_labels} label{s_labels_plural}")
+    if u.close_commit:
+        emit("Closed in **{u.close_commit}**")
+    elif u.status and not u.state:
+        emit("Changed status to **{u.status}**")
+    elif u.state == 'closed':
+        emit("Closed with status **{u.status}**")
+    elif u.state == 'open':
+        emit("Reopened, status set to **{u.status}**")
 
     return '\n'.join('> {}'.format(line) for line in lines).format(**locals())
 
