@@ -703,9 +703,10 @@ def get_gcode_updates(updates_pq):
 
 
 def get_gcode_comment(issue, comment_pq):
-    comment = ExtraNamespace(
-        created_at = parse_gcode_date(comment_pq('.date').attr('title')),
-        updated_at = options.export_date)
+    comment = ExtraNamespace()
+
+    comment.created_at = parse_gcode_date(comment_pq('.date').attr('title'))
+    comment.updated_at = options.export_date or comment.created_at
 
     comment.extra.issue_number = issue.number
     comment.extra.link = issue.extra.link + '#' + comment_pq('a').attr('name')
@@ -738,9 +739,12 @@ def get_gcode_issue(summary):
         number     = int(summary['ID']) + (options.issues_start_from - 1),
         title      = summary['Summary'].strip(),
         state      = 'closed' if summary['Closed'] else 'open',
-        closed_at  = timestamp_to_date(summary['ClosedTimestamp']) if summary['Closed'] else None,
-        created_at = timestamp_to_date(summary['OpenedTimestamp']),
-        updated_at = options.export_date)
+        closed_at  = None)
+
+    if summary['Closed']:
+        issue.closed_at = timestamp_to_date(summary['ClosedTimestamp'])
+    issue.created_at = timestamp_to_date(summary['OpenedTimestamp'])
+    issue.updated_at = options.export_date or issue.created_at
 
     if not issue.title:
         issue.title = "FIXME: empty title"
