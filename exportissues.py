@@ -410,7 +410,7 @@ def join_paragraphs(paragraphs):
 
 def map_author(gc_uid, kind=None):
     if not gc_uid:
-        return
+        return gc_uid, None
 
     email_pat = gc_uid
     if '@' not in email_pat:
@@ -421,24 +421,31 @@ def map_author(gc_uid, kind=None):
     matches = []
     for email, gh_user in author_map.items():
         if email_re.match(email):
-            matches.append((gh_user, email))
-    if len(dict(matches)) > 1:
+            if email.endswith('@gmail.com'):
+                email = email[:-len('@gmail.com')]
+            if email.lower() == gc_uid.lower():
+                email = gc_uid  # when possible, preserve the original case
+            matches.append((email, gh_user))
+    if len(set(gh_user for email, gh_user in matches)) > 1:
         output('FIXME: multiple matches for {gc_uid}'.format(**locals()))
-        for gh_user, email in matches:
+        for email, gh_user in matches:
             output('\t{email}'.format(**locals()))
     elif matches:
-        gh_user, email = matches[0]
+        email, gh_user = matches[0]
         if gh_user:
             output("Mapping {:<10} {:>22} -> {:>30}  :  {}"
                    .format('[{}]'.format(kind), gc_uid, email, gh_user), level=3)
-            return gh_user
-        else:
+        if len(matches) == 1:
             gc_uid = email
+        if gh_user:
+            return gc_uid, gh_user
 
     output("Warning: no mapping for author {:<10} {:>22}"
            .format('[{}]'.format(kind), gc_uid), level=2)
 
     missing_authors[kind][gc_uid] += 1
+
+    return gc_uid, None
 
 
 # Format with google_project_name
@@ -680,8 +687,7 @@ def get_gcode_updates(updates_pq):
         if key == 'Owner':
             if value == '---':
                 value = ''
-            updates.orig_owner = value
-            updates.assignee = map_author(updates.orig_owner, 'owner')
+            updates.orig_owner, updates.assignee = map_author(value, 'owner')
 
         elif key == 'Status':
             updates.status = value
@@ -705,8 +711,7 @@ def get_gcode_comment(issue, comment_pq):
     comment.extra.link = issue.extra.link + '#' + comment_pq('a').attr('name')
     comment.extra.updates = get_gcode_updates(comment_pq('.updates .box-inner'))
 
-    comment.extra.orig_user = comment_pq('.userlink').text()
-    comment.user = map_author(comment.extra.orig_user, 'comment')
+    comment.extra.orig_user, comment.user = map_author(comment_pq('.userlink').text(), 'comment')
 
     if issue.state == 'closed' and comment.extra.updates.status in closed_labels:
         if comment.user:
@@ -744,17 +749,15 @@ def get_gcode_issue(summary):
     issue.extra.issue_number = issue.number
 
     orig_user = summary['Reporter']
-    issue.user = map_author(orig_user, 'reporter')
-    issue.extra.orig_user = orig_user
+    issue.extra.orig_user, issue.user = map_author(orig_user, 'reporter')
 
     orig_owner = summary['Owner']
     if orig_owner == '---':
         orig_owner = ''
-    issue.assignee = map_author(orig_owner, 'owner')
-    issue.extra.orig_owner = orig_owner
+    issue.extra.orig_owner, issue.assignee = map_author(orig_owner, 'owner')
     issue.extra.initially_assigned = bool(orig_owner)
 
-    issue.extra.cc = list(uniq(non_empty(map_author(cc, 'cc')
+    issue.extra.cc = list(uniq(non_empty(map_author(cc, 'cc')[1]
                                          for cc in summary['Cc'].split(', '))))
     if issue.user in issue.extra.cc:
         issue.extra.cc.remove(issue.user)
