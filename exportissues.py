@@ -360,12 +360,12 @@ def add_issue_to_github(issue):
     output('Exporting issue {}'.format(issue.number), level=1)
 
     format_message(issue)
-    write_json(issue, "issues/{}.json".format(issue.number))
+    write_json(issue, "out/issues/{}.json".format(issue.number))
 
     for i, comment in enumerate(issue.extra.comments):
         format_message(comment, i+1)
     write_json([comment for comment in issue.extra.comments if comment.body],
-               "issues/{}.comments.json".format(issue.number))
+               "out/issues/{}.comments.json".format(issue.number))
 
 
 ###############################################################################
@@ -842,7 +842,7 @@ def process_gcode_issues():
     if milestones:
         for m in milestones.values():
             output('Adding milestone {}'.format(m.number), level=1)
-            write_json(m, 'milestones/{}.json'.format(m.number))
+            write_json(m, 'out/milestones/{}.json'.format(m.number))
 
 
 def get_milestone(label, initializing=False):
@@ -1162,11 +1162,9 @@ def main():
 
                 commit_map[key] = tmp_map[value] if tmp_map else value
 
-    if not os.path.exists('issues'):
-        os.mkdir('issues')
-
-    if not os.path.exists('milestones'):
-        os.mkdir('milestones')
+    for dir_ in 'out', 'out/issues', 'out/milestones':
+        if not os.path.exists(dir_):
+            os.mkdir(dir_)
 
     if options.messages_input:
         messages = read_messages(options.messages_input)
