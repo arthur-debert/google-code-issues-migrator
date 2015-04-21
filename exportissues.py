@@ -694,7 +694,7 @@ def get_gcode_updates(updates_pq):
 
         elif key == 'Mergedinto':
             ref_text = value.rpartition(':')[-1]
-            if ref_text:
+            if ref_text and not value.startswith('-'):
                 updates.mergedinto = int(ref_text) + (options.issues_start_from - 1)
             else:
                 updates.mergedinto = 0
