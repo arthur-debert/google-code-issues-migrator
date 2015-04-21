@@ -201,12 +201,13 @@ def format_md_updates(u):
     elif u.orig_owner == '':
         emit("Unassigned")
 
-    if u.status in closed_labels:
-        if u.close_commit:
-            emit("Closed in **{u.close_commit}**")
-        else:
-            emit("Closed with status **{u.status}**")
-    elif u.status in open_labels:
+    if u.close_commit:
+        emit("Closed in **{u.close_commit}**")
+    elif u.status and not u.state:
+        emit("Changed status to **{u.status}**")
+    elif u.state == 'closed':
+        emit("Closed with status **{u.status}**")
+    elif u.state == 'open':
         emit("Reopened, status set to **{u.status}**")
 
     if u.mergedinto:
@@ -642,6 +643,7 @@ def get_gcode_updates(updates_pq):
         orig_owner    = None,
         assignee      = None,
         status        = None,
+        state         = None,
         mergedinto    = None,
         new_milestone = None,
         old_milestone = None,
@@ -714,6 +716,10 @@ def get_gcode_comment(issue, comment_pq):
 
     comment.extra.orig_user, comment.user = map_author(comment_pq('.userlink').text(), 'comment')
 
+    for state, labels in ('open', open_labels), ('closed', closed_labels):
+        if issue.extra.last_state != state and comment.extra.updates.status in labels:
+            issue.extra.last_state = comment.extra.updates.state = state
+
     if issue.state == 'closed' and comment.extra.updates.status in closed_labels:
         if comment.user:
             issue.closed_by = comment.user
@@ -751,6 +757,7 @@ def get_gcode_issue(summary):
         output(" FIXME: empty title")
 
     issue.extra.issue_number = issue.number
+    issue.extra.last_state = 'open'  # initially, used to track updates
 
     orig_user = summary['Reporter']
     issue.extra.orig_user, issue.user = map_author(orig_user, 'reporter')
