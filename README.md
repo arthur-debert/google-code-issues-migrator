@@ -45,6 +45,7 @@ Run `pip install -r requirements.txt` to install all required libraries.
       google_project_name       The project name (from the URL) from google code
       github_user_name          The Github username
       github_project            The Github project name, e.g. username/project
+                                For Organizations, use orgname/project
 
     Options:
       -h, --help                Show this help message and exit
@@ -54,8 +55,10 @@ Run `pip install -r requirements.txt` to install all required libraries.
       -s, --synchronize-ids     Ensure that migrated issues keep the same ID
       -c, --google-code-cookie  Supply cookies to use for scraping Google Code
       --skip-closed             Skip all closed bugs
-
-        You will be prompted for your github password.
+      --start-at                Start at the given Google Code issue number
+      --migrate-stars           Migrate binned star counts as labels
+      
+    You will be prompted for your github password.
 
 `--assign-owner` automatically assigns any issues that currently have an owner
 to your Github user (the one running the script), even if you weren't the
@@ -82,3 +85,14 @@ and getting the raw names requires being logged in and having filled out a
 CAPTCHA.
 
 `--skip-closed` will skip migrating issues that were closed.
+
+`--start-at` will skip migrating issues with Google Code issue numbers less than 
+the provided value.
+
+`--migrate-stars` will migrate the 'Stars' count on each Google Code issue to
+Github labels. The following mapping is used:
+* `Stars == 1`: Label '1 star'
+* `Stars <= 5`: Label '2–5 stars'
+* `Stars <= 10`: Label '6–10 stars'
+* `Stars <= 20`: Label '11–20 stars'
+* `Stars >= 21`: Label '21+ stars'
