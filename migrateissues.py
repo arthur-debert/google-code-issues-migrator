@@ -48,6 +48,8 @@ STATE_MAPPING = {
     'wontfix': 'wontfix'
 }
 
+MENTIONS_PATTERN = re.compile(r'(.*(?:\s|^))@([a-zA-Z0-9]+\b)')
+
 def stars_to_label(stars):
     '''Return a label string corresponding to a star range.
 
@@ -104,6 +106,19 @@ def github_label(name, color = "FFFFFF"):
         except GithubException:
             return label_cache.setdefault(name, github_repo.create_label(name, color))
 
+def github_milestone(name):
+    """ Returns the Github milestone with given name, creating it if necessary. """
+
+    try:
+        return milestone_cache[name]
+    except KeyError:
+        try:
+            number = milestone_number[name]
+            return milestone_cache.setdefault(name, github_repo.get_milestone(number))
+        except KeyError:
+            m = milestone_cache.setdefault(name, github_repo.create_milestone(name))
+            milestone_number.setdefault(name, m.number)
+            return m
 
 def parse_gcode_date(date_text):
     """ Transforms a Google Code date into a more human readable string. """
@@ -115,6 +130,15 @@ def parse_gcode_date(date_text):
 
     return parsed.strftime("%B %d, %Y %H:%M:%S")
 
+
+def dereference(matchobj):
+    if matchobj.group(1):
+        return matchobj.group(1) + "@-" + matchobj.group(2)
+    else:
+        return "@-" + matchobj.group(2)
+
+def dereferenceMention(content):
+    return MENTIONS_PATTERN.sub(dereference, content)
 
 def add_issue_to_github(issue):
     """ Migrates the given Google Code issue to Github. """
@@ -134,9 +158,13 @@ def add_issue_to_github(issue):
 
     if not options.dry_run:
         github_labels = [github_label(label) for label in issue['labels']]
+        milestone = github_milestone(issue['milestone'])
+        issue['title'] = issue['title'].strip()
+        if issue['title'] == '':
+            issue['title'] = "(empty title)"
         text = body.encode('utf-8')
         text = transform_to_markdown_compliant(text)
-        github_issue = github_repo.create_issue(issue['title'], body = text, labels = github_labels)
+        github_issue = github_repo.create_issue(issue['title'], body = text, labels = github_labels, milestone = milestone)
 
     # Assigns issues that originally had an owner to the current user
     if issue['owner'] and options.assign_owner:
@@ -207,11 +235,16 @@ def get_gcode_issue(issue_summary):
         'status': issue_summary['Status'].lower()
     }
 
+    issue['milestone'] = "backlog"
+
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
     labels = ['imported']
     for label in issue_summary['AllLabels'].split(', '):
         if label.startswith('Priority-') and options.omit_priority:
+            continue
+        if label.startswith('Milestone-'):
+            issue['milestone'] = label[10:]
             continue
         if not label:
             continue
@@ -251,7 +284,7 @@ def get_gcode_issue(issue_summary):
                 text = '...' + text
             issue['comments'].append(comment.copy())
 
-    split_comment(issue, description('pre').text())
+    split_comment(issue, dereferenceMention(description('pre').text()))
     issue['content'] = u'_From {author} on {date:%B %d, %Y %H:%M:%S}_\n\n{content}{attachments}\n\n{footer}'.format(
             content = issue['comments'].pop(0)['body'],
             footer = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL.format(google_project_name, issue['gid'])),
@@ -267,7 +300,7 @@ def get_gcode_issue(issue_summary):
             continue # Skip deleted comments
 
         date = parse_gcode_date(comment('.date').attr('title'))
-        body = comment('pre').text()
+        body = dereferenceMention(comment('pre').text())
         author = get_author(comment)
 
         updates = comment('.updates .box-inner')
@@ -308,6 +341,10 @@ def process_gcode_issues(existing_issues):
         issues = [x for x in issues if int(x['ID']) >= options.start_at]
         previous_gid = options.start_at - 1
         output('Starting at issue %d\n' % options.start_at)
+
+    if options.end_at is not None:
+        issues = [x for x in issues if int(x['ID']) <= options.end_at]
+        output('End at issue %d\n' % options.end_at)
 
     for issue in issues:
         issue = get_gcode_issue(issue)
@@ -399,6 +436,7 @@ if __name__ == "__main__":
     parser.add_option("-c", "--google-code-cookie", dest = "google_code_cookie", help = "Cookie to use for Google Code requests. Required to get unmangled names", default = '')
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
+    parser.add_option('--end-at', dest = 'end_at', help = 'End at the given Google Code issue number', default = None, type = int)
     parser.add_option('--migrate-stars', action = 'store_true', dest = 'migrate_stars', help = 'Migrate binned star counts as labels', default = False)
 
     options, args = parser.parse_args()
@@ -408,6 +446,8 @@ if __name__ == "__main__":
         sys.exit()
 
     label_cache = {} # Cache Github tags, to avoid unnecessary API requests
+    milestone_cache = {}
+    milestone_number = {}
 
     google_project_name, github_user_name, github_project = args
 
@@ -442,6 +482,13 @@ if __name__ == "__main__":
 
     try:
         existing_issues = get_existing_github_issues()
+
+        for i in existing_issues.values():
+            if i.milestone:
+                m = i.milestone
+                milestone_number.setdefault(m.title, m.number)
+                milestone_cache.setdefault(m.title, m)
+
         log_rate_info()
         process_gcode_issues(existing_issues)
     except Exception:

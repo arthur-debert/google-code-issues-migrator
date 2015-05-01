@@ -1,1 +1,30 @@
-*.pyc
+issues
+milestones
+
+.attachments-cache.json
+
+config.ini
+messages.txt
+messages.txt-old
+authors.json
+commits.map
+labels.ini
+
+# Python
+__pycache__
+*.py[cod]
+
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+parts
+bin
+var
+sdist
+develop-eggs
+.installed.cfg
+lib
+lib64
