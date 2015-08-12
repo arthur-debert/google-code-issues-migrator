@@ -270,8 +270,8 @@ def get_gcode_issue(issue_summary):
         try:
             body = comment('pre').text()
         except:
-            body = "SEE ISSUE ON GH!"
-            logging.error("Comment cannot be imported due to some error in comment")
+            body = "(There was an error importing this comment body. See original issue on Google Code.)"
+            logging.error("Error importing comment body")
         author = get_author(comment)
 
         updates = comment('.updates .box-inner')
