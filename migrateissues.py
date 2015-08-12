@@ -69,6 +69,13 @@ def output(string):
     sys.stdout.write(string)
     sys.stdout.flush()
 
+def spacing_template(wordList, spacing=12):
+    output = []
+    template = '\t{0:%d}' % (spacing)
+    for word in wordList:
+        output.append(template.format(word))
+    return ' : '.join(output)
+
 def escape(s):
     """Process text to convert markup and escape things which need escaping"""
     if s:
@@ -105,6 +112,18 @@ def github_label(name, color = "FFFFFF"):
             return label_cache.setdefault(name, github_repo.create_label(name, color))
 
 
+def get_github_milestone(name):
+    """ Returns the Github milestone with the given name, creating it if necessary. """
+
+    try:
+        return milestone_cache[name]
+    except KeyError:
+        for milestone in list(github_repo.get_milestones()):
+            if milestone.title == name:
+                return milestone_cache.setdefault(name, milestone)
+        return milestone_cache.setdefault(name, github_repo.create_milestone(name))
+
+
 def parse_gcode_date(date_text):
     """ Transforms a Google Code date into a more human readable string. """
 
@@ -130,13 +149,32 @@ def add_issue_to_github(issue):
 
     output('Adding issue %d' % issue['gid'])
 
+    if options.verbose:
+        output('\n')
+        outList = [
+            spacing_template(['Title', issue['title']]),
+            spacing_template(['State', issue['state']]),
+            spacing_template(['Labels', issue['labels']]),
+            spacing_template(['Milestone', issue['milestone']]),
+            spacing_template(['Source link', issue['link']])
+        ]
+        output('\n'.join(outList))
+
     github_issue = None
 
     if not options.dry_run:
         github_labels = [github_label(label) for label in issue['labels']]
         text = body.encode('utf-8')
         text = transform_to_markdown_compliant(text)
-        github_issue = github_repo.create_issue(issue['title'], body = text, labels = github_labels)
+        if issue['milestone']:
+            github_milestone = get_github_milestone(issue['milestone'])
+            github_issue = github_repo.create_issue(issue['title'], body = text, labels = github_labels,
+                milestone = github_milestone)
+        else:
+            github_issue = github_repo.create_issue(issue['title'], body = text, labels = github_labels)
+        if options.verbose and github_issue:
+            output('\n')
+            output(spacing_template(['Dest link', github_issue.url]))
 
     # Assigns issues that originally had an owner to the current user
     if issue['owner'] and options.assign_owner:
@@ -154,7 +192,7 @@ def add_comments_to_issue(github_issue, gcode_issue):
     existing_comments = [comment.body for comment in github_issue.get_comments()]
 
     # Add any remaining comments to the Github issue
-    output(", adding comments")
+    output("\nSyncing comments ")
     for i, comment in enumerate(gcode_issue['comments']):
         body = u'_From {author} on {date}_\n\n{body}'.format(**comment)
         topost = transform_to_markdown_compliant(body)
@@ -162,6 +200,8 @@ def add_comments_to_issue(github_issue, gcode_issue):
             logging.info('Skipping comment %d: already present', i + 1)
         else:
             logging.info('Adding comment %d', i + 1)
+            if options.verbose:
+                output('\n\tAdd: From {author} on {date}'.format(**comment))
             if not options.dry_run:
                 topost = topost.encode('utf-8')
                 github_issue.create_comment(topost)
@@ -173,7 +213,6 @@ def add_comments_to_issue(github_issue, gcode_issue):
                 # XXX: querying GitHub in a loop to see when the comment has
                 # been posted may be faster, but will cut into the rate limit.
                 time.sleep(5)
-            output('.')
 
 def get_attachments(link, attachments):
     if not attachments:
@@ -209,8 +248,13 @@ def get_gcode_issue(issue_summary):
 
     # Build a list of labels to apply to the new issue, including an 'imported' tag that
     # we can use to identify this issue as one that's passed through migration.
+    # Also, build a milestone (google code sees it as a label)
+    milestone = None
     labels = ['imported']
     for label in issue_summary['AllLabels'].split(', '):
+        if label.startswith('Milestone-'):
+            milestone = label.replace('Milestone-', '')
+            continue
         if label.startswith('Priority-') and options.omit_priority:
             continue
         if not label:
@@ -225,12 +269,17 @@ def get_gcode_issue(issue_summary):
         labels.append(STATE_MAPPING[issue['status']])
 
     issue['labels'] = labels
+    issue['milestone'] = milestone
 
     # Scrape the issue details page for the issue body and comments
     opener = urllib2.build_opener()
     if options.google_code_cookie:
         opener.addheaders = [('Cookie', options.google_code_cookie)]
-    connection = opener.open(issue['link'])
+    # Missing issues may still exist in csv; make sure link is good
+    try:
+        connection = opener.open(issue['link'])
+    except urllib2.HTTPError:
+        return None
     encoding = connection.headers['content-type'].split('charset=')[-1]
     # Pass "ignore" so malformed page data doesn't abort us
     doc = pq(connection.read().decode(encoding, "ignore"))
@@ -316,6 +365,10 @@ def process_gcode_issues(existing_issues):
     for issue in issues:
         issue = get_gcode_issue(issue)
 
+        # problem occured getting issue information from url, may be deleted
+        if issue is None:
+            continue
+
         if options.skip_closed and (issue['state'] == 'closed'):
             continue
 
@@ -352,7 +405,6 @@ def process_gcode_issues(existing_issues):
         output('\n')
 
         log_rate_info()
-
 
 def get_existing_github_issues():
     """ Returns a dictionary of Github issues previously migrated from Google Code.
@@ -404,6 +456,7 @@ if __name__ == "__main__":
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
     parser.add_option('--migrate-stars', action = 'store_true', dest = 'migrate_stars', help = 'Migrate binned star counts as labels', default = False)
+    parser.add_option('--verbose', action = 'store_true', dest = 'verbose', help = 'Print more detailed information for each add.', default = False)
 
     options, args = parser.parse_args()
 
@@ -412,6 +465,7 @@ if __name__ == "__main__":
         sys.exit()
 
     label_cache = {} # Cache Github tags, to avoid unnecessary API requests
+    milestone_cache = {}
 
     google_project_name, github_user_name, github_project = args
 
