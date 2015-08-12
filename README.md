@@ -59,7 +59,7 @@ If you have problems, try `sudo pip install -r requirements.txt --upgrade`.
       --skip-closed             Skip all closed bugs
       --start-at                Start at the given Google Code issue number
       --migrate-stars           Migrate binned star counts as labels
-      --verbose                 Print more verbose information for each add.
+      -v, --verbose             Print more detailed information during migration
 
     You will be prompted for your github password.
 
