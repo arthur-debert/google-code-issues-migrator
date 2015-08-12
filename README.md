@@ -38,6 +38,8 @@ mucking up what's already on Github.
 
 Run `pip install -r requirements.txt` to install all required libraries.
 
+If you have problems, try `sudo pip install -r requirements.txt --upgrade`.
+
 ### Usage ###
 
     migrateissues.py [options] <google project name> <github username> <github project>
