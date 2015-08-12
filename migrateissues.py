@@ -16,10 +16,7 @@ from github import Github
 from github import GithubException
 from pyquery import PyQuery as pq
 
-logging.basicConfig(level = logging.ERROR)
-
 # The maximum number of records to retrieve from Google Code in a single request
-
 GOOGLE_MAX_RESULTS = 25
 
 GOOGLE_ISSUE_TEMPLATE = '_Original issue: {}_'
@@ -30,18 +27,15 @@ GOOGLE_ID_RE = GOOGLE_ISSUE_TEMPLATE.format(GOOGLE_URL_RE)
 
 # The minimum number of remaining Github rate-limited API requests before we pre-emptively
 # abort to avoid hitting the limit part-way through migrating an issue.
-
 GITHUB_SPARE_REQUESTS = 50
 
 # Mapping from Google Code issue labels to Github labels
-
 LABEL_MAPPING = {
     'Type-Defect' : 'bug',
     'Type-Enhancement' : 'enhancement'
 }
 
 # Mapping from Google Code issue states to Github labels
-
 STATE_MAPPING = {
     'invalid': 'invalid',
     'duplicate': 'duplicate',
@@ -456,13 +450,18 @@ if __name__ == "__main__":
     parser.add_option('--skip-closed', action = 'store_true', dest = 'skip_closed', help = 'Skip all closed bugs', default = False)
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
     parser.add_option('--migrate-stars', action = 'store_true', dest = 'migrate_stars', help = 'Migrate binned star counts as labels', default = False)
-    parser.add_option('--verbose', action = 'store_true', dest = 'verbose', help = 'Print more detailed information for each add.', default = False)
+    parser.add_option("-v", '--verbose', action = 'store_true', dest = 'verbose', help = 'Print more detailed information during migration', default = False)
 
     options, args = parser.parse_args()
 
     if len(args) != 3:
         parser.print_help()
         sys.exit()
+
+    if options.verbose:
+        logging.basicConfig(level = logging.INFO)
+    else:
+        logging.basicConfig(level = logging.ERROR)
 
     label_cache = {} # Cache Github tags, to avoid unnecessary API requests
     milestone_cache = {}

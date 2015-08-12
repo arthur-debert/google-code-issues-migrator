@@ -58,7 +58,7 @@ Run `pip install -r requirements.txt` to install all required libraries.
       --start-at                Start at the given Google Code issue number
       --migrate-stars           Migrate binned star counts as labels
       --verbose                 Print more verbose information for each add.
-      
+
     You will be prompted for your github password.
 
 `--assign-owner` automatically assigns any issues that currently have an owner
@@ -87,13 +87,13 @@ CAPTCHA.
 
 `--skip-closed` will skip migrating issues that were closed.
 
-`--start-at` will skip migrating issues with Google Code issue numbers less than 
+`--start-at` will skip migrating issues with Google Code issue numbers less than
 the provided value.
 
 `--migrate-stars` will migrate the 'Stars' count on each Google Code issue to
 Github labels. The following mapping is used:
 * `Stars == 1`: Label '1 star'
-* `Stars <= 5`: Label '2–5 stars'
-* `Stars <= 10`: Label '6–10 stars'
-* `Stars <= 20`: Label '11–20 stars'
+* `Stars <= 5`: Label '2-5 stars'
+* `Stars <= 10`: Label '6-10 stars'
+* `Stars <= 20`: Label '11-20 stars'
 * `Stars >= 21`: Label '21+ stars'
