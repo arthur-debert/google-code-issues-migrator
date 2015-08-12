@@ -473,7 +473,7 @@ if __name__ == "__main__":
         try:
             Github(github_user_name, github_password).get_user().login
             break
-        except BadCredentialsException:
+        except Exception:
             print "Bad credentials, try again."
 
     github = Github(github_user_name, github_password)
