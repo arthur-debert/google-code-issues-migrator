@@ -330,13 +330,16 @@ def get_gcode_issue(issue_summary):
 
     return issue
 
-def get_gcode_issues():
+def get_gcode_issues(onlyissues=None):
     count = 100
     start_index = 0
     issues = []
     while True:
         url = GOOGLE_ISSUES_URL.format(google_project_name, count, start_index)
-        issues.extend(row for row in csv.DictReader(urllib2.urlopen(url), dialect=csv.excel))
+        if onlyissues:
+            issues.extend(row for row in csv.DictReader(urllib2.urlopen(url), dialect=csv.excel) if row['ID'] in onlyissues)
+        else:
+            issues.extend(row for row in csv.DictReader(urllib2.urlopen(url), dialect=csv.excel))
 
         if issues and 'truncated' in issues[-1]['ID']:
             issues.pop()
@@ -345,10 +348,10 @@ def get_gcode_issues():
             return issues
 
 
-def process_gcode_issues(existing_issues):
+def process_gcode_issues(existing_issues, onlyissues=None):
     """ Migrates all Google Code issues in the given dictionary to Github. """
 
-    issues = get_gcode_issues()
+    issues = get_gcode_issues(onlyissues)
     previous_gid = 1
 
     if options.start_at is not None:
@@ -451,12 +454,16 @@ if __name__ == "__main__":
     parser.add_option('--start-at', dest = 'start_at', help = 'Start at the given Google Code issue number', default = None, type = int)
     parser.add_option('--migrate-stars', action = 'store_true', dest = 'migrate_stars', help = 'Migrate binned star counts as labels', default = False)
     parser.add_option("-v", '--verbose', action = 'store_true', dest = 'verbose', help = 'Print more detailed information during migration', default = False)
+    parser.add_option("-o", "--only", dest="only", help="Migrate only the specified issues. Pass a single parameter containing a list of issues IDs, like \"1 3 98 110\"", default=None)
 
     options, args = parser.parse_args()
 
     if len(args) != 3:
         parser.print_help()
         sys.exit()
+
+    if options.only:
+        options.only = options.only.split()
 
     if options.verbose:
         logging.basicConfig(level = logging.INFO)
@@ -500,7 +507,7 @@ if __name__ == "__main__":
     try:
         existing_issues = get_existing_github_issues()
         log_rate_info()
-        process_gcode_issues(existing_issues)
+        process_gcode_issues(existing_issues, options.only)
     except Exception:
         parser.print_help()
         raise
