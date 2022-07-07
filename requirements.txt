@@ -1,5 +1,5 @@
 PyGithub==1.17.0
 cssselect==0.8
-lxml==3.2.3
+lxml==4.9.1
 pyquery==1.2.4
 wsgiref==0.1.2
